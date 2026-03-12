@@ -75,11 +75,10 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
-    "publish": [
-      {
-        "provider": "generic",
-        "url": "https://update.eatpan.com/releases/"
-      }
-    ]
+    "publish": [{
+      "provider": "github",
+      "owner": "EssenceMaks",
+      "repo": "EatPan_p2p_demo_L4"
+    }]
   }
 }
