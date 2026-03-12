@@ -14,7 +14,7 @@ import { bootstrap } from '@libp2p/bootstrap'
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2'
 
 const TOPIC = 'eatpan-chat'
-const RELAY_WS = '/ip4/63.177.83.41/tcp/9091/ws/p2p/12D3KooWPjuetDeAeyArEwXZtnnyRm9E4sgbLkS4y9myzESB8pa5'
+const RELAY_WS = '/dns4/relay.eatpan.com/tcp/443/wss/p2p/12D3KooWPjuetDeAeyArEwXZtnnyRm9E4sgbLkS4y9myzESB8pa5'
 
 function randomName() {
   const adj = ['Cool','Fast','Brave','Wild','Calm','Wise','Bold','Keen']
