@@ -6,6 +6,10 @@
  * Discovery:
  *   - mDNS — локальна мережа (свої пристрої)
  *   - Bootstrap + Relay — інтернет
+ * 
+ * Route detection:
+ *   - 🏠 direct  — mDNS, TCP напряму (LAN)
+ *   - 🌐 relay   — через VPS relay (GossipSub mesh)
  */
 
 // Polyfill: Node 18 (Electron 28) не має CustomEvent
@@ -33,16 +37,28 @@ import { randomBytes } from 'crypto'
 const TOPIC = 'eatpan-chat'
 
 // ─── Relay/Bootstrap адреси ───
-// AWS EC2 relay (eu-central-1, free tier)
 const DEFAULT_RELAY = '/ip4/63.177.83.41/tcp/9090/p2p/12D3KooWPjuetDeAeyArEwXZtnnyRm9E4sgbLkS4y9myzESB8pa5'
+const RELAY_PEER_ID = '12D3KooWPjuetDeAeyArEwXZtnnyRm9E4sgbLkS4y9myzESB8pa5'
 
 const RELAY_ADDRS = (process.env.RELAY_ADDRS || DEFAULT_RELAY)
   .split(',')
   .map(s => s.trim())
   .filter(Boolean)
 
+// Extract all relay PeerIds from addresses
+const RELAY_PEER_IDS = new Set(
+  RELAY_ADDRS.map(addr => {
+    const parts = addr.split('/p2p/')
+    return parts.length > 1 ? parts[parts.length - 1] : null
+  }).filter(Boolean)
+)
+
 export async function createP2PBackend(callbacks = {}) {
   const nodeName = 'User-' + randomBytes(3).toString('hex')
+
+  // ─── Track discovery source ───
+  const discoveredViaMdns = new Set()
+  const discoveredViaBootstrap = new Set()
 
   // ─── Peer discovery modules ───
   const peerDiscovery = [mdns({ interval: 2000 })]
@@ -78,36 +94,89 @@ export async function createP2PBackend(callbacks = {}) {
 
   const peerId = node.peerId.toString()
   const onlinePeers = new Map()
-  onlinePeers.set(peerId, { name: nodeName, lastSeen: Date.now(), via: 'self' })
+  onlinePeers.set(peerId, { name: nodeName, lastSeen: Date.now(), via: 'self', route: 'self' })
 
-  // Визначити тип з'єднання
-  const getConnectionType = (remotePeerId) => {
+  // ─── Determine route for a peer ───
+  function getRoute(remotePeerId) {
+    // Relay itself
+    if (RELAY_PEER_IDS.has(remotePeerId)) return 'relay-node'
+
+    // Check if we have a DIRECT connection to this peer (not through relay)
     const conns = node.getConnections(remotePeerId)
+    let hasDirectConn = false
     for (const conn of conns) {
-      const remoteAddr = conn.remoteAddr.toString()
-      if (remoteAddr.includes('/p2p-circuit/')) return 'relay'
+      const addr = conn.remoteAddr.toString()
+      if (addr.includes('/p2p-circuit/')) {
+        return 'relay' // Circuit relay transport
+      }
+      // Direct TCP/WS connection exists
+      hasDirectConn = true
     }
-    return 'direct'
+
+    // If discovered via mDNS AND has direct connection → truly local
+    if (discoveredViaMdns.has(remotePeerId) && hasDirectConn) {
+      return 'direct'
+    }
+
+    // If we only know this peer through GossipSub pings (no direct connection)
+    // → messages are routed via the relay's GossipSub mesh
+    if (!hasDirectConn) {
+      return 'relay'
+    }
+
+    // Has direct connection but NOT from mDNS → could be through bootstrap/relay node
+    // Check if the connection's remote address is a local network IP
+    for (const conn of conns) {
+      const addr = conn.remoteAddr.toString()
+      const ipMatch = addr.match(/\/ip4\/([\d.]+)\//)
+      if (ipMatch) {
+        const ip = ipMatch[1]
+        if (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
+          return 'direct'
+        }
+      }
+    }
+
+    return 'relay'
   }
+
+  // ─── Track peer discovery events ───
+  node.addEventListener('peer:discovery', (evt) => {
+    const discoveredId = evt.detail.id.toString()
+    // Check multiaddrs to determine source
+    const addrs = evt.detail.multiaddrs?.map(a => a.toString()) || []
+    const hasLocalAddr = addrs.some(a => {
+      const m = a.match(/\/ip4\/([\d.]+)\//)
+      return m && (m[1].startsWith('192.168.') || m[1].startsWith('10.') || m[1].startsWith('172.') || m[1] === '127.0.0.1')
+    })
+
+    if (hasLocalAddr && !RELAY_PEER_IDS.has(discoveredId)) {
+      discoveredViaMdns.add(discoveredId)
+    } else {
+      discoveredViaBootstrap.add(discoveredId)
+    }
+  })
 
   console.log(`[P2P] Started: ${nodeName} (${peerId.substring(0, 12)}...)`)
   if (RELAY_ADDRS.length > 0) {
-    console.log(`[P2P] Relay bootstrap: ${RELAY_ADDRS.length} address(es)`)
+    console.log(`[P2P] Relay: ${RELAY_ADDRS.length} addr(s), PeerIDs: ${[...RELAY_PEER_IDS].map(s => s.substring(0,12)).join(', ')}`)
   } else {
-    console.log(`[P2P] No relay configured — mDNS only (local network)`)
+    console.log(`[P2P] No relay configured — mDNS only`)
   }
 
   // ─── P2P Events ───
   node.addEventListener('peer:connect', (evt) => {
     const remote = evt.detail.toString()
-    const connType = getConnectionType(remote)
-    console.log(`[P2P] Connected (${connType}): ${remote.substring(0, 16)}...`)
+    const route = getRoute(remote)
+    console.log(`[P2P] Connected [${route}]: ${remote.substring(0, 16)}...`)
     callbacks.onConnected?.(remote)
   })
 
   node.addEventListener('peer:disconnect', (evt) => {
     const remote = evt.detail.toString()
     onlinePeers.delete(remote)
+    discoveredViaMdns.delete(remote)
+    discoveredViaBootstrap.delete(remote)
     console.log(`[P2P] Disconnected: ${remote.substring(0, 16)}...`)
     callbacks.onDisconnected?.(remote)
     callbacks.onPeersUpdate?.(Object.fromEntries(onlinePeers))
@@ -120,15 +189,18 @@ export async function createP2PBackend(callbacks = {}) {
       const data = JSON.parse(new TextDecoder().decode(evt.detail.data))
 
       if (data.type === 'chat' && data.text) {
+        // Add route info to chat messages
+        data.route = getRoute(data.peerId)
         callbacks.onChat?.(data)
       }
 
       if (data.type === 'ping') {
-        const connType = getConnectionType(data.peerId)
+        const route = getRoute(data.peerId)
         onlinePeers.set(data.peerId, {
           name: data.name,
           lastSeen: Date.now(),
-          via: connType
+          via: route,
+          route: route
         })
         callbacks.onPeersUpdate?.(Object.fromEntries(onlinePeers))
       }
@@ -168,7 +240,6 @@ export async function createP2PBackend(callbacks = {}) {
         const encoded = new TextEncoder().encode(JSON.stringify(msg))
         await node.services.pubsub.publish(TOPIC, encoded)
       } catch (e) { /* ignore */ }
-      // Показати собі теж
       callbacks.onChat?.(msg)
     },
 
@@ -179,6 +250,7 @@ export async function createP2PBackend(callbacks = {}) {
       peers: Object.fromEntries(onlinePeers),
       connections: node.getConnections().length,
       relayConfigured: RELAY_ADDRS.length > 0,
+      relayPeerIds: [...RELAY_PEER_IDS],
     }),
 
     stop: async () => {

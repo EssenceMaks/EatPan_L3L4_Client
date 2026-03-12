@@ -343,7 +343,7 @@
   <!-- Title Bar -->
   <div class="titlebar">
     <h1>🍳 EatPan</h1>
-    <span class="version">v0.8.0</span>
+    <span class="version">v0.9.0</span>
     <span class="my-name" id="myName">...</span>
     <div class="status-badge">
       <div class="status-dot" id="statusDot"></div>
@@ -432,27 +432,41 @@
       $peerList.innerHTML = ''
       let count = 0
       let relayCount = 0
+      let directCount = 0
       for (const [id, info] of Object.entries(peers)) {
         count++
-        if (info.via === 'relay') relayCount++
+        const route = info.route || info.via || 'unknown'
+        if (route === 'relay') relayCount++
+        if (route === 'direct') directCount++
+
         const div = document.createElement('div')
         div.className = 'peer-item'
         const c = peerColor(info.name)
         const isMe = id === myPeerId
-        const connIcon = info.via === 'relay' ? '🌐' : (info.via === 'self' ? '' : '🏠')
+
+        // Route icon + tooltip
+        let connIcon = '', connTitle = ''
+        if (route === 'self') { connIcon = ''; connTitle = '' }
+        else if (route === 'direct') { connIcon = '🏠'; connTitle = 'Пряме з\'єднання (LAN — mDNS)' }
+        else if (route === 'relay') { connIcon = '🌐'; connTitle = 'Через AWS relay (інтернет)' }
+        else if (route === 'relay-node') { connIcon = '🔄'; connTitle = 'Relay сервер (AWS VPS)' }
+        else { connIcon = '❓'; connTitle = 'Невідомий маршрут' }
+
         div.innerHTML = `
           <div class="peer-avatar" style="background:${c}">${info.name[0].toUpperCase()}</div>
           <div class="peer-info">
             <div class="peer-name">${esc(info.name)}${isMe ? ' (ти)' : ''}</div>
-            <div class="peer-id">${id.substring(0,12)}...</div>
+            <div class="peer-id">${id.substring(0,12)}... <span style="opacity:0.6">${route}</span></div>
           </div>
-          <span class="peer-conn-type" title="${info.via === 'relay' ? 'Через relay (internet)' : 'Пряме з\'єднання (LAN)'}">${connIcon}</span>
+          <span class="peer-conn-type" title="${connTitle}">${connIcon}</span>
           <div class="peer-online-dot"></div>
         `
         $peerList.appendChild(div)
       }
-      const relayInfo = relayCount > 0 ? ` • ${relayCount} 🌐` : ''
-      $('connectionInfo').textContent = `P2P • ${count} онлайн${relayInfo}`
+      const parts = [`P2P • ${count} онлайн`]
+      if (directCount > 0) parts.push(`${directCount} 🏠`)
+      if (relayCount > 0) parts.push(`${relayCount} 🌐`)
+      $('connectionInfo').textContent = parts.join(' • ')
     }
 
     // ═══════════════ SEND ═══════════════
