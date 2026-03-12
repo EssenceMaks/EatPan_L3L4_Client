@@ -116,7 +116,7 @@ P4_Terminal/
 | Relay не ретранслює повідомлення | `node.services.pubsub.subscribe('eatpan-chat')` на relay |
 | PeerId змінюється при рестарті relay | Оновлювати `DEFAULT_RELAY` в `p2p.mjs` після рестарту |
 | `$ already declared` в single-file HTML | Перейменовано `$` → `$el`, обгорнуто в IIFE |
-| GitHub Pages Mixed Content (HTTPS → ws://) | **TODO**: домен + SSL cert (Let's Encrypt + nginx) |
+| GitHub Pages Mixed Content (HTTPS → ws://) | `relay.eatpan.com` + Let's Encrypt + nginx WSS proxy ✅ |
 | Всі піри показують 🏠 | Нові `getRoute()` — трекає mDNS vs bootstrap discovery |
 
 ---
@@ -127,15 +127,30 @@ P4_Terminal/
 # SSH на relay
 ssh -i C:\Users\user\.ssh\eatpan-relay-fixed.pem ec2-user@63.177.83.41
 
-# Логи
+# Логи relay
 sudo journalctl -u eatpan-relay --no-pager -n 20
 
-# Перезапуск
+# Перезапуск relay
 sudo systemctl restart eatpan-relay
 
-# Статус
-sudo systemctl status eatpan-relay
+# Статус nginx (WSS proxy)
+sudo systemctl status nginx
+
+# Перевірка SSL сертифіката
+sudo certbot certificates
+
+# Оновити SSL (авто через timer, але можна вручну)
+sudo certbot renew
 ```
+
+### SSL/WSS Інфраструктура
+| Компонент | Деталі |
+|-----------|--------|
+| Домен | `relay.eatpan.com` (DNS A-record на ukraine.com.ua) |
+| SSL Cert | Let's Encrypt, expires 2026-06-10, auto-renewal |
+| nginx | Reverse proxy wss:443 → ws:9091 |
+| Config | `/etc/nginx/conf.d/relay.conf` |
+| Cert path | `/etc/letsencrypt/live/relay.eatpan.com/` |
 
 ---
 
@@ -147,29 +162,33 @@ sudo systemctl status eatpan-relay
 3. Обидва автоматично підключаються до AWS relay → бачать один одного 🌐
 
 ### Web Chat (браузер)
-1. Відкрити `eatpan-chat.html` в браузері
-2. Або: https://essencemaks.github.io/EatPan_p2p_demo_L4/ (⚠️ потрібен WSS)
+1. Відкрити `eatpan-chat.html` в браузері (file:// — працює завжди)
+2. Або: **https://essencemaks.github.io/EatPan_p2p_demo_L4/** (WSS через relay.eatpan.com ✅)
+3. З мобільного — теж працює!
 
 ### Локально (LAN)
 - mDNS discovery працює як раніше → піри показують 🏠
 
 ---
 
-## Наступні кроки
+## Виконано
 
-### WSS для GitHub Pages
-- Потрібен домен (Let's Encrypt не видає cert на IP)
-- nginx reverse proxy: wss → ws на EC2
-- Оновити `RELAY_WS` в `p2p-browser.mjs` на `wss://domain/ws/...`
+### ✅ WSS для GitHub Pages
+- Домен: `relay.eatpan.com` (DNS A-record)
+- nginx reverse proxy: wss:443 → ws:9091
+- Let's Encrypt SSL (auto-renewal)
+- Web-chat: `wss://relay.eatpan.com` (multiaddr: `/dns4/relay.eatpan.com/tcp/443/wss/p2p/<PeerId>`)
 
-### Elastic IP
+### TODO: Elastic IP
 - Поточний IP може змінитися при stop/start EC2
-- Потрібно додати Elastic IP або DNS
+- Потрібно додати Elastic IP або DNS update script
 
-### Releases
+---
+
+## Releases
 | Версія | Зміни |
 |--------|-------|
 | v0.6.0 | Relay code + circuit-relay |
 | v0.7.0 | AWS relay, zero-config |
 | v0.8.0 | GossipSub fix + web chat |
-| v0.9.0 | Route detection (direct/relay/relay-node) |
+| v0.9.0 | Route detection (direct/relay/relay-node) + WSS (relay.eatpan.com) |
