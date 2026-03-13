@@ -48,6 +48,9 @@
     "files": [
       "main.cjs",
       "p2p.mjs",
+      "backbone.mjs",
+      "cluster.mjs",
+      "mode-switch.mjs",
       "preload.cjs",
       "launch.cjs",
       "renderer/**/*",
@@ -73,6 +76,14 @@
         "dmg"
       ],
       "category": "public.app-category.food-and-drink",
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Network",
       "icon": "assets/icon.png"
     },
     "nsis": {

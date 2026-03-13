@@ -195,7 +195,9 @@ export async function createP2PBackend(callbacks = {}, backboneClient = null) {
       const data = JSON.parse(new TextDecoder().decode(evt.detail.data))
 
       if (data.type === 'chat' && data.text) {
-        // Skip own messages (relay can echo back via different path)
+        // ── DEDUP LAYER 1: skip own messages by peerId ──
+        if (data.peerId === peerId) return
+        // ── DEDUP LAYER 2: skip own messages by UUID (relay echo) ──
         if (data.id && sentMessageIds.has(data.id)) return
         // Add route info to chat messages
         data.route = getRoute(data.peerId)
