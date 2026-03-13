@@ -89,7 +89,7 @@ export class BackboneClient {
       text: msg.text,
       message_type: 'chat',
       client_timestamp: msg.timestamp || Date.now(),
-      room_topic: this.room,
+      room_topic: msg.room_topic || this.room,
       version: msg.version || 1,
       vector_clock: msg.vectorClock || { [this.nodeId]: 1 },
       node_origin: this.nodeId,
@@ -151,7 +151,7 @@ export class BackboneClient {
       if (res.ok) {
         const result = await res.json()
         if (result.saved > 0) {
-          console.log(`[Backbone] Synced ${result.saved} messages to L2 (conflicts: ${result.conflicts})`)
+          try { console.log(`[Backbone] Synced ${result.saved} messages to L2 (conflicts: ${result.conflicts})`) } catch {}
         }
       } else {
         // Put back failed messages
@@ -162,7 +162,7 @@ export class BackboneClient {
       // Network error — put back and mark offline
       this.pendingSync.unshift(...batch)
       this.isOnline = false
-      console.warn('[Backbone] Sync failed, L2 unreachable:', e.message)
+      try { console.warn('[Backbone] Sync failed, L2 unreachable:', e.message) } catch {}
     }
   }
 

@@ -13,6 +13,13 @@ const path = require('path')
 
 const isDev = process.argv.includes('--dev')
 
+// Suppress EPIPE errors (broken stdout pipe during console.log)
+process.on('uncaughtException', (err) => {
+  if (err.code === 'EPIPE' || err.message?.includes('EPIPE')) return
+  console.error('[FATAL]', err)
+  process.exit(1)
+})
+
 let mainWindow = null
 let p2pBackend = null
 let backboneClient = null   // L2 Backbone API client
