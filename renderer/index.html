@@ -220,6 +220,74 @@
       text-align: center;
     }
 
+    /* ─── ROOM LIST ─── */
+    .room-list { overflow-y: auto; flex: 1; padding: 0 4px; }
+
+    .room-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 8px; margin-bottom: 1px;
+      cursor: pointer; transition: all 0.15s; position: relative;
+    }
+    .room-item:hover { background: var(--surface2); }
+    .room-item.active { background: rgba(124,106,255,0.15); border: 1px solid rgba(124,106,255,0.3); }
+
+    .room-icon { font-size: 16px; flex-shrink: 0; }
+    .room-info { flex: 1; min-width: 0; }
+    .room-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .room-preview { font-size: 10px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .room-unread {
+      background: var(--accent); color: white; font-size: 10px; font-weight: 700;
+      min-width: 18px; height: 18px; border-radius: 9px; text-align: center;
+      line-height: 18px; flex-shrink: 0;
+    }
+
+    .room-section-title {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--text-dim); padding: 10px 10px 4px; display: flex;
+      justify-content: space-between; align-items: center;
+    }
+    .room-section-title button {
+      background: none; border: none; color: var(--accent); font-size: 14px;
+      cursor: pointer; padding: 0 4px; border-radius: 4px;
+    }
+    .room-section-title button:hover { background: var(--surface2); }
+
+    .peer-section { border-top: 1px solid var(--border); max-height: 140px; overflow-y: auto; }
+
+    /* ─── CHAT HEADER ─── */
+    .chat-header {
+      padding: 8px 16px; border-bottom: 1px solid var(--border);
+      background: var(--surface); display: flex; align-items: center; gap: 8px;
+      flex-shrink: 0;
+    }
+    .chat-header .chat-room-name { font-size: 14px; font-weight: 600; }
+    .chat-header .chat-room-type { font-size: 10px; color: var(--text-dim); }
+
+    /* ─── MODAL ─── */
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 20px; width: 340px; max-height: 400px;
+    }
+    .modal h3 { margin-bottom: 12px; font-size: 15px; }
+    .modal input {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 13px;
+      outline: none; margin-bottom: 8px;
+    }
+    .modal input:focus { border-color: var(--accent); }
+    .modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+    .modal-btns button {
+      padding: 6px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 12px; font-weight: 600;
+    }
+    .modal-btns .btn-cancel { background: var(--surface2); color: var(--text-dim); }
+    .modal-btns .btn-ok { background: var(--accent); color: white; }
+
     /* ─── CHAT ─── */
     .chat-area {
       flex: 1;
@@ -343,7 +411,7 @@
   <!-- Title Bar -->
   <div class="titlebar">
     <h1>🍳 EatPan</h1>
-    <span class="version">v0.11.0</span>
+    <span class="version">v0.12.0</span>
     <span class="my-name" id="myName">...</span>
     <div class="status-badge">
       <div class="status-dot" id="statusDot"></div>
@@ -364,11 +432,18 @@
   <!-- Main -->
   <div class="main">
     <div class="sidebar">
-      <h2>Online</h2>
-      <div class="peer-list" id="peerList"></div>
+      <!-- Rooms -->
+      <div class="room-section-title">Rooms <button id="newRoomBtn" title="New room">➕</button></div>
+      <div class="room-list" id="roomList"></div>
+
+      <!-- Peers -->
+      <div class="room-section-title">Online</div>
+      <div class="peer-section">
+        <div class="peer-list" id="peerList"></div>
+      </div>
 
       <!-- L3 Cluster Dashboard -->
-      <div id="l3Panel" style="display:none; padding:8px; border-top:1px solid var(--border); margin-top:8px;">
+      <div id="l3Panel" style="display:none; padding:8px; border-top:1px solid var(--border);">
         <div style="font-size:10px; color:var(--accent); font-weight:600; margin-bottom:4px;">L3 CLUSTER</div>
         <div id="l3StatsBox" style="font-size:10px; color:var(--text-dim); line-height:1.6;"></div>
       </div>
@@ -385,6 +460,12 @@
     </div>
 
     <div class="chat-area">
+      <!-- Chat header showing active room -->
+      <div class="chat-header">
+        <span class="chat-room-name" id="chatRoomName">🌍 Global Chat</span>
+        <span class="chat-room-type" id="chatRoomType">broadcast</span>
+      </div>
+
       <div class="messages" id="messages">
         <div class="message system">Підключення до P2P мережі...</div>
       </div>
@@ -398,10 +479,32 @@
     </div>
   </div>
 
+  <!-- New Room Modal -->
+  <div class="modal-overlay" id="newRoomModal">
+    <div class="modal">
+      <h3>📣 New Room</h3>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:11px;color:var(--text-dim);">Room name</label>
+        <input type="text" id="newRoomName" placeholder="My Group">
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">
+        ℹ️  DM: click a peer in the sidebar. Group: type name above.
+      </div>
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="$('newRoomModal').classList.remove('show')">Відміна</button>
+        <button class="btn-ok" onclick="createGroupRoom()">Створити</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ═══════════════ STATE ═══════════════
     let myName = ''
     let myPeerId = ''
+    let activeRoomId = 'global'
+    let activeRoomTopic = 'eatpan-chat'
+    const messagesByRoom = new Map()  // roomId -> [msg, ...]
+    const rooms = []  // cached room list
     const colors = ['#7c6aff','#fb923c','#4ade80','#f87171','#38bdf8','#e879f9','#fbbf24','#34d399']
 
     function peerColor(name) {
@@ -416,8 +519,21 @@
     const $input = $('msgInput')
     const $sendBtn = $('sendBtn')
     const $peerList = $('peerList')
+    const $roomList = $('roomList')
 
     function addMessage(data) {
+      // Store in messagesByRoom
+      const topic = data.room_topic || 'eatpan-chat'
+      let roomId = 'global'
+      for (const r of rooms) {
+        if (r.topic === topic) { roomId = r.id; break }
+      }
+      if (!messagesByRoom.has(roomId)) messagesByRoom.set(roomId, [])
+      messagesByRoom.get(roomId).push(data)
+
+      // Only render if this room is active
+      if (roomId !== activeRoomId) return
+
       const div = document.createElement('div')
       const isMine = data.peerId === myPeerId
       div.className = `message ${isMine ? 'mine' : 'other'}`
@@ -441,41 +557,125 @@
       $messages.scrollTop = $messages.scrollHeight
     }
 
-    function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+    function esc(s) { return s?.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') || '' }
+
+    // ═══════════════ ROOMS ═══════════════
+
+    async function loadRooms() {
+      const list = await window.eatpan.getRooms()
+      rooms.length = 0
+      rooms.push(...list)
+      renderRooms()
+    }
+
+    function renderRooms() {
+      $roomList.innerHTML = ''
+      for (const room of rooms) {
+        const div = document.createElement('div')
+        div.className = `room-item ${room.id === activeRoomId ? 'active' : ''}`
+        const icon = room.type === 'global' ? '🌍' : room.type === 'dm' ? '💬' : '👥'
+        const preview = room.lastMessage?.text || ''
+        div.innerHTML = `
+          <span class="room-icon">${icon}</span>
+          <div class="room-info">
+            <div class="room-name">${esc(room.name)}</div>
+            <div class="room-preview">${esc(preview)}</div>
+          </div>
+          ${room.unread > 0 ? `<span class="room-unread">${room.unread}</span>` : ''}
+        `
+        div.onclick = () => switchRoom(room.id)
+        // Context menu for non-global rooms
+        if (room.type !== 'global') {
+          div.oncontextmenu = (e) => {
+            e.preventDefault()
+            if (confirm(`Leave room "${room.name}"?`)) {
+              window.eatpan.leaveRoom(room.id).then(() => loadRooms())
+            }
+          }
+        }
+        $roomList.appendChild(div)
+      }
+    }
+
+    function switchRoom(roomId) {
+      activeRoomId = roomId
+      const room = rooms.find(r => r.id === roomId)
+      if (room) {
+        activeRoomTopic = room.topic
+        $('chatRoomName').textContent = (room.type === 'global' ? '🌍' : room.type === 'dm' ? '💬' : '👥') + ' ' + room.name
+        $('chatRoomType').textContent = room.type
+      }
+      // Reset unread
+      window.eatpan.resetUnread(roomId)
+      // Re-render room list (update active state)
+      renderRooms()
+      // Render messages for this room
+      $messages.innerHTML = ''
+      const msgs = messagesByRoom.get(roomId) || []
+      for (const msg of msgs) {
+        const div = document.createElement('div')
+        const isMine = msg.peerId === myPeerId
+        div.className = `message ${isMine ? 'mine' : 'other'}`
+        const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        div.innerHTML = `
+          <div class="msg-header">
+            <span class="msg-name">${esc(msg.from)}</span>
+            <span class="msg-time">${time}</span>
+          </div>
+          <div>${esc(msg.text)}</div>
+        `
+        $messages.appendChild(div)
+      }
+      $messages.scrollTop = $messages.scrollHeight
+      $input.focus()
+    }
+
+    async function createGroupRoom() {
+      const name = $('newRoomName').value.trim()
+      if (!name) return
+      await window.eatpan.createGroup(name, [])
+      $('newRoomName').value = ''
+      $('newRoomModal').classList.remove('show')
+      await loadRooms()
+    }
+
+    $('newRoomBtn').addEventListener('click', () => {
+      $('newRoomModal').classList.add('show')
+      $('newRoomName').focus()
+    })
 
     function updatePeers(peers) {
       $peerList.innerHTML = ''
-      let count = 0
-      let relayCount = 0
-      let directCount = 0
+      let count = 0, relayCount = 0, directCount = 0
       for (const [id, info] of Object.entries(peers)) {
         count++
         const route = info.route || info.via || 'unknown'
         if (route === 'relay') relayCount++
         if (route === 'direct') directCount++
-
         const div = document.createElement('div')
         div.className = 'peer-item'
         const c = peerColor(info.name)
         const isMe = id === myPeerId
-
-        // Route icon + tooltip
-        let connIcon = '', connTitle = ''
-        if (route === 'self') { connIcon = ''; connTitle = '' }
-        else if (route === 'direct') { connIcon = '🏠'; connTitle = 'Пряме з\'єднання (LAN — mDNS)' }
-        else if (route === 'relay') { connIcon = '🌐'; connTitle = 'Через AWS relay (інтернет)' }
-        else if (route === 'relay-node') { connIcon = '🔄'; connTitle = 'Relay сервер (AWS VPS)' }
-        else { connIcon = '❓'; connTitle = 'Невідомий маршрут' }
-
+        let connIcon = route === 'direct' ? '🏠' : route === 'relay' ? '🌐' : route === 'relay-node' ? '🔄' : ''
         div.innerHTML = `
           <div class="peer-avatar" style="background:${c}">${info.name[0].toUpperCase()}</div>
           <div class="peer-info">
             <div class="peer-name">${esc(info.name)}${isMe ? ' (ти)' : ''}</div>
-            <div class="peer-id">${id.substring(0,12)}... <span style="opacity:0.6">${route}</span></div>
           </div>
-          <span class="peer-conn-type" title="${connTitle}">${connIcon}</span>
+          <span class="peer-conn-type">${connIcon}</span>
           <div class="peer-online-dot"></div>
         `
+        // Click peer to start DM
+        if (!isMe && id !== 'self') {
+          div.style.cursor = 'pointer'
+          div.onclick = async () => {
+            const room = await window.eatpan.createDM(id, info.name)
+            if (room) {
+              await loadRooms()
+              switchRoom(room.id)
+            }
+          }
+        }
         $peerList.appendChild(div)
       }
       const parts = [`P2P • ${count} онлайн`]
@@ -488,7 +688,7 @@
     function send() {
       const text = $input.value.trim()
       if (!text) return
-      window.eatpan.sendMessage(text)
+      window.eatpan.sendMessage(text, activeRoomTopic)
       $input.value = ''
       $input.focus()
     }
@@ -509,6 +709,7 @@
       $messages.innerHTML = ''
       addSystem(`👋 Ти — ${myName}. Шукаю інших пірів...`)
       updatePeers(status.peers)
+      loadRooms()
     })
 
     // Повідомлення
@@ -517,14 +718,24 @@
     // Оновлення списку пірів
     window.eatpan.onPeersUpdate((peers) => updatePeers(peers))
 
-    // Новий пір
-    window.eatpan.onPeerConnected((id) => {
-      addSystem(`✅ Новий пір підключився`)
+    // Room updates (unread, last message)
+    window.eatpan.onRoomUpdate((room) => {
+      // Reload room list to update badges
+      loadRooms()
     })
 
-    window.eatpan.onPeerDisconnected((id) => {
-      addSystem(`❌ Пір від'єднався`)
+    // Room invites
+    window.eatpan.onRoomInvite(async (data) => {
+      if (data.targetPeerId && data.targetPeerId !== myPeerId) return // not for me
+      addSystem(`📩 Invite to "${data.roomName}" from ${data.from}`)
+      // Auto-join
+      await window.eatpan.joinGroup(data.roomTopic, data.roomName)
+      await loadRooms()
     })
+
+    // Peer events
+    window.eatpan.onPeerConnected((id) => addSystem(`✅ Новий пір підключився`))
+    window.eatpan.onPeerDisconnected((id) => addSystem(`❌ Пір від'єднався`))
 
     // ═══════════════ L2 BACKBONE STATUS ═══════════════
 
@@ -586,35 +797,7 @@
       updateL2Badge()
     })
 
-    // ═══════════════ IPC LISTENERS ═══════════════
 
-    // Статус ноди
-    window.eatpan.getStatus().then((status) => {
-      if (!status) return
-      myName = status.name
-      myPeerId = status.peerId
-      $('myName').textContent = myName
-      $('statusDot').classList.add('online')
-      $('statusText').textContent = 'Online'
-      $messages.innerHTML = ''
-      addSystem(`👋 Ти — ${myName}. Шукаю інших пірів...`)
-      updatePeers(status.peers)
-    })
-
-    // Повідомлення
-    window.eatpan.onChatMessage((msg) => addMessage(msg))
-
-    // Оновлення списку пірів
-    window.eatpan.onPeersUpdate((peers) => updatePeers(peers))
-
-    // Новий пір
-    window.eatpan.onPeerConnected((id) => {
-      addSystem(`✅ Новий пір підключився`)
-    })
-
-    window.eatpan.onPeerDisconnected((id) => {
-      addSystem(`❌ Пір від'єднався`)
-    })
 
     // ═══════════════ AUTO-UPDATE ═══════════════
     const $updateBanner = $('updateBanner')

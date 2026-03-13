@@ -17,6 +17,8 @@ let mainWindow = null
 let p2pBackend = null
 let backboneClient = null   // L2 Backbone API client
 let modeController = null   // L4 ↔ L3 mode controller
+let roomManager = null      // Room manager (DM + Group)
+let contactList = null      // Saved contacts
 
 // ═══════════════════════════════════════════
 //  Вікно
@@ -49,8 +51,8 @@ function createWindow() {
 // ═══════════════════════════════════════════
 
 function setupIPC() {
-  ipcMain.on('send-message', (_event, text) => {
-    if (p2pBackend) p2pBackend.sendChat(text)
+  ipcMain.on('send-message', (_event, text, topic) => {
+    if (p2pBackend) p2pBackend.sendChat(text, topic || undefined)
   })
   ipcMain.handle('get-status', () => {
     if (!p2pBackend) return null
@@ -94,6 +96,54 @@ function setupIPC() {
   })
   ipcMain.handle('cluster-stats', () => {
     return modeController?.clusterNode?.getStats() || null
+  })
+
+  // ── Rooms IPC ──
+  ipcMain.handle('get-rooms', () => roomManager?.listRooms() || [])
+  ipcMain.handle('create-dm', (_e, peerId, peerName) => {
+    if (!roomManager) return null
+    const room = roomManager.getOrCreateDM(peerId, peerName)
+    // Subscribe to DM topic
+    p2pBackend?.joinTopic(room.topic)
+    return room
+  })
+  ipcMain.handle('create-group', (_e, name, memberIds) => {
+    if (!roomManager) return null
+    const room = roomManager.createGroup(name, memberIds)
+    p2pBackend?.joinTopic(room.topic)
+    // Send invites to members
+    for (const mid of memberIds) {
+      p2pBackend?.sendInvite(room.topic, room.name, mid)
+    }
+    return room
+  })
+  ipcMain.handle('join-group', (_e, topic, name) => {
+    if (!roomManager) return null
+    const room = roomManager.joinGroup(topic, name)
+    p2pBackend?.joinTopic(room.topic)
+    return room
+  })
+  ipcMain.handle('leave-room', (_e, roomId) => {
+    if (!roomManager) return false
+    const topic = roomManager.leaveRoom(roomId)
+    if (topic) p2pBackend?.leaveTopic(topic)
+    return !!topic
+  })
+  ipcMain.handle('reset-unread', (_e, roomId) => {
+    roomManager?.resetUnread(roomId)
+  })
+
+  // ── Contacts IPC ──
+  ipcMain.handle('get-contacts', () => contactList?.list() || [])
+  ipcMain.handle('save-contact', (_e, peerId, name) => {
+    contactList?.addContact(peerId, name, name)
+    return true
+  })
+  ipcMain.handle('remove-contact', (_e, peerId) => {
+    return contactList?.removeContact(peerId) || false
+  })
+  ipcMain.handle('rename-contact', (_e, peerId, newName) => {
+    return contactList?.rename(peerId, newName) || false
   })
 }
 
@@ -211,6 +261,14 @@ app.whenReady().then(async () => {
         if (mainWindow) mainWindow.webContents.send('chat-message', msg)
         // Forward to L3 cluster node (if active)
         modeController?.onGossipMessage(msg)
+        // Update room last message
+        const topic = msg.room_topic || 'eatpan-chat'
+        const room = roomManager?.findByTopic(topic)
+        if (room) {
+          roomManager.updateLastMessage(room.id, msg)
+          // Send room update to UI for unread badges
+          if (mainWindow) mainWindow.webContents.send('room-update', room)
+        }
       },
       onPeersUpdate: (peers) => {
         if (mainWindow) mainWindow.webContents.send('peers-update', peers)
@@ -220,6 +278,12 @@ app.whenReady().then(async () => {
             modeController.updatePeer(id, info)
           }
         }
+        // Update contact lastSeen
+        if (contactList) {
+          for (const [id, info] of Object.entries(peers)) {
+            contactList.updateLastSeen(id, info.name)
+          }
+        }
       },
       onConnected: (peerId) => {
         if (mainWindow) mainWindow.webContents.send('peer-connected', peerId)
@@ -227,9 +291,25 @@ app.whenReady().then(async () => {
       onDisconnected: (peerId) => {
         if (mainWindow) mainWindow.webContents.send('peer-disconnected', peerId)
         modeController?.removePeer(peerId)
-      }
+      },
+      onInvite: (data) => {
+        // Room invite received
+        if (mainWindow) mainWindow.webContents.send('room-invite', data)
+      },
     }, backboneClient)  // ← pass backbone client
     console.log('[P2P] Backend started')
+
+    // ── Initialize RoomManager + ContactList ──
+    const roomsModule = await import('./rooms.mjs')
+    const contactsModule = await import('./contacts.mjs')
+    roomManager = new roomsModule.RoomManager(app.getPath('userData'), p2pBackend.getStatus().peerId)
+    contactList = new contactsModule.ContactList(app.getPath('userData'))
+
+    // Subscribe to all saved room topics
+    for (const topic of roomManager.getAllTopics()) {
+      p2pBackend.joinTopic(topic)
+    }
+    console.log(`[Rooms] Loaded ${roomManager.rooms.size} rooms, subscribed to ${roomManager.getAllTopics().length} topics`)
 
     // ─── Send history AFTER window loads (if window was created first) ───────
     mainWindow?.webContents.once('did-finish-load', async () => {

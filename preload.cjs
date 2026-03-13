@@ -6,7 +6,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('eatpan', {
   // Chat
-  sendMessage: (text) => ipcRenderer.send('send-message', text),
+  sendMessage: (text, topic) => ipcRenderer.send('send-message', text, topic),
   onChatMessage: (cb) => ipcRenderer.on('chat-message', (_e, msg) => cb(msg)),
 
   // Peers
@@ -37,6 +37,20 @@ contextBridge.exposeInMainWorld('eatpan', {
   downgradeToL4: () => ipcRenderer.invoke('downgrade-to-l4'),
   clusterStats: () => ipcRenderer.invoke('cluster-stats'),
   onModeChanged: (cb) => ipcRenderer.on('mode-changed', (_e, s) => cb(s)),
+
+  // Rooms
+  getRooms: () => ipcRenderer.invoke('get-rooms'),
+  createDM: (peerId, peerName) => ipcRenderer.invoke('create-dm', peerId, peerName),
+  createGroup: (name, memberIds) => ipcRenderer.invoke('create-group', name, memberIds),
+  joinGroup: (topic, name) => ipcRenderer.invoke('join-group', topic, name),
+  leaveRoom: (roomId) => ipcRenderer.invoke('leave-room', roomId),
+  resetUnread: (roomId) => ipcRenderer.invoke('reset-unread', roomId),
+  onRoomUpdate: (cb) => ipcRenderer.on('room-update', (_e, room) => cb(room)),
+  onRoomInvite: (cb) => ipcRenderer.on('room-invite', (_e, data) => cb(data)),
+
+  // Contacts
+  getContacts: () => ipcRenderer.invoke('get-contacts'),
+  saveContact: (peerId, name) => ipcRenderer.invoke('save-contact', peerId, name),
+  removeContact: (peerId) => ipcRenderer.invoke('remove-contact', peerId),
+  renameContact: (peerId, newName) => ipcRenderer.invoke('rename-contact', peerId, newName),
 })
-
-

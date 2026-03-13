@@ -96,7 +96,10 @@ export async function createP2PBackend(callbacks = {}, backboneClient = null) {
     }
   })
 
+  // Subscribe to global topic (always)
   node.services.pubsub.subscribe(TOPIC)
+  // Track subscribed topics
+  const subscribedTopics = new Set([TOPIC])
 
   const peerId = node.peerId.toString()
   const onlinePeers = new Map()
@@ -188,9 +191,11 @@ export async function createP2PBackend(callbacks = {}, backboneClient = null) {
     callbacks.onPeersUpdate?.(Object.fromEntries(onlinePeers))
   })
 
-  // ─── Обробка повідомлень ───
+  // ─── Обробка повідомлень (multi-topic) ───
   node.services.pubsub.addEventListener('message', (evt) => {
-    if (evt.detail.topic !== TOPIC) return
+    const topic = evt.detail.topic
+    // Only process topics we're subscribed to
+    if (!subscribedTopics.has(topic)) return
     try {
       const data = JSON.parse(new TextDecoder().decode(evt.detail.data))
 
@@ -199,13 +204,19 @@ export async function createP2PBackend(callbacks = {}, backboneClient = null) {
         if (data.peerId === peerId) return
         // ── DEDUP LAYER 2: skip own messages by UUID (relay echo) ──
         if (data.id && sentMessageIds.has(data.id)) return
-        // Add route info to chat messages
+        // Add route info and topic to chat messages
         data.route = getRoute(data.peerId)
+        data.room_topic = topic
         // Ensure UUID exists (older clients may not have one)
         if (!data.id) data.id = randomUUID()
         callbacks.onChat?.(data)
         // → Sync received message to L2 Backbone
         backboneClient?.enqueueSync(data)
+      }
+
+      if (data.type === 'invite' && data.roomTopic) {
+        // Room invite — notify UI
+        callbacks.onInvite?.(data)
       }
 
       if (data.type === 'ping') {
@@ -242,7 +253,11 @@ export async function createP2PBackend(callbacks = {}, backboneClient = null) {
 
   // ─── Публічний API ───
   return {
-    sendChat: async (text) => {
+    /**
+     * Send chat message to a specific topic (default: global).
+     */
+    sendChat: async (text, targetTopic) => {
+      const topic = targetTopic || TOPIC
       const msgId = randomUUID()
       // Track this ID so we skip relay echo
       sentMessageIds.add(msgId)
@@ -258,15 +273,58 @@ export async function createP2PBackend(callbacks = {}, backboneClient = null) {
         peerId,
         text,
         timestamp: Date.now(),
+        room_topic: topic,
         vectorClock: { [peerId]: 1 }
+      }
+      try {
+        const encoded = new TextEncoder().encode(JSON.stringify(msg))
+        await node.services.pubsub.publish(topic, encoded)
+      } catch (e) { /* ignore */ }
+      callbacks.onChat?.(msg)
+      // → Sync sent message to L2 Backbone
+      backboneClient?.enqueueSync(msg)
+    },
+
+    /**
+     * Subscribe to a GossipSub topic (for DM or group room).
+     */
+    joinTopic: (topic) => {
+      if (!subscribedTopics.has(topic)) {
+        node.services.pubsub.subscribe(topic)
+        subscribedTopics.add(topic)
+        console.log(`[P2P] Subscribed to topic: ${topic.substring(0, 30)}...`)
+      }
+    },
+
+    /**
+     * Unsubscribe from a GossipSub topic.
+     */
+    leaveTopic: (topic) => {
+      if (topic === TOPIC) return  // never leave global
+      if (subscribedTopics.has(topic)) {
+        node.services.pubsub.unsubscribe(topic)
+        subscribedTopics.delete(topic)
+        console.log(`[P2P] Unsubscribed from topic: ${topic.substring(0, 30)}...`)
+      }
+    },
+
+    /**
+     * Send invite to a peer (via global topic).
+     */
+    sendInvite: async (roomTopic, roomName, targetPeerId) => {
+      const msg = {
+        type: 'invite',
+        from: nodeName,
+        peerId,
+        roomTopic,
+        roomName,
+        targetPeerId,
+        timestamp: Date.now(),
       }
       try {
         const encoded = new TextEncoder().encode(JSON.stringify(msg))
         await node.services.pubsub.publish(TOPIC, encoded)
       } catch (e) { /* ignore */ }
-      callbacks.onChat?.(msg)
-      // → Sync sent message to L2 Backbone
-      backboneClient?.enqueueSync(msg)
     },
 
     getStatus: () => ({
@@ -279,6 +337,7 @@ export async function createP2PBackend(callbacks = {}, backboneClient = null) {
       relayPeerIds: [...RELAY_PEER_IDS],
       backboneOnline: backboneClient?.isOnline ?? false,
       backbonePending: backboneClient?.pendingSync?.length ?? 0,
+      subscribedTopics: [...subscribedTopics],
     }),
 
     stop: async () => {
