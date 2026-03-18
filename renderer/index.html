@@ -368,6 +368,7 @@
     <div class="sidebar-bottom">
       <button class="sidebar-btn" id="seederToggle" title="Toggle L3 Seeder Mode">⚡ Seeder</button>
       <button class="sidebar-btn" id="newGroupBtn" title="Create Group">+ Group</button>
+      <button class="sidebar-btn" id="checkUpdatesBtn" title="Check for Updates">🔄 Updates</button>
     </div>
   </div>
 
@@ -681,13 +682,15 @@
     // ═══════════════════════════════════════════
     //  Auto-Update
     // ═══════════════════════════════════════════
-    let updateState = 'idle' // idle, available, downloading, ready
+    let updateState = 'idle' // idle, checking, available, downloading, ready
 
     window.eatpan.onUpdateAvailable((info) => {
       updateState = 'available'
       document.getElementById('updateBanner').classList.add('show')
-      document.getElementById('updateText').textContent = `Update ${info.version} available!`
+      document.getElementById('updateText').textContent = `🆕 Update ${info.version} available!`
       document.getElementById('updateBtn').textContent = 'Download'
+      document.getElementById('checkUpdatesBtn').textContent = '🆕 Update!'
+      document.getElementById('checkUpdatesBtn').style.color = 'var(--green)'
     })
 
     window.eatpan.onUpdateProgress((p) => {
@@ -697,12 +700,30 @@
 
     window.eatpan.onUpdateDownloaded(() => {
       updateState = 'ready'
-      document.getElementById('updateText').textContent = 'Update downloaded!'
+      document.getElementById('updateText').textContent = '✅ Update downloaded!'
       document.getElementById('updateBtn').textContent = 'Install & Restart'
     })
 
     window.eatpan.onUpdateError((err) => {
-      document.getElementById('updateText').textContent = `Update error: ${err.message}`
+      document.getElementById('updateBanner').classList.add('show')
+      document.getElementById('updateText').textContent = `❌ Update error: ${err.message}`
+      document.getElementById('checkUpdatesBtn').textContent = '🔄 Updates'
+      document.getElementById('checkUpdatesBtn').style.color = ''
+    })
+
+    window.eatpan.onUpdateChecking(() => {
+      updateState = 'checking'
+      document.getElementById('checkUpdatesBtn').textContent = '⏳ Checking...'
+    })
+
+    window.eatpan.onUpdateNotAvailable(() => {
+      updateState = 'idle'
+      document.getElementById('checkUpdatesBtn').textContent = '✅ Up to date'
+      document.getElementById('checkUpdatesBtn').style.color = 'var(--green)'
+      setTimeout(() => {
+        document.getElementById('checkUpdatesBtn').textContent = '🔄 Updates'
+        document.getElementById('checkUpdatesBtn').style.color = ''
+      }, 3000)
     })
 
     function handleUpdate() {
@@ -712,6 +733,10 @@
         window.eatpan.installUpdate()
       }
     }
+
+    document.getElementById('checkUpdatesBtn').addEventListener('click', () => {
+      window.eatpan.checkForUpdates()
+    })
 
     // ═══════════════════════════════════════════
     //  Refresh status periodically

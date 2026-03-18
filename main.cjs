@@ -193,6 +193,11 @@ async function setupAutoUpdater() {
       }
     })
     ipcMain.on('install-update', () => autoUpdater.quitAndInstall())
+    ipcMain.on('check-for-updates', () => {
+      console.log('[Updater] Manual check triggered')
+      if (mainWindow) mainWindow.webContents.send('update-checking')
+      autoUpdater.checkForUpdates()
+    })
 
     autoUpdater.checkForUpdates()
     setInterval(() => autoUpdater.checkForUpdates(), 30 * 60 * 1000)

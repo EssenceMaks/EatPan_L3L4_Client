@@ -22,8 +22,11 @@ contextBridge.exposeInMainWorld('eatpan', {
   onUpdateProgress: (cb) => ipcRenderer.on('update-progress', (_e, p) => cb(p)),
   onUpdateDownloaded: (cb) => ipcRenderer.on('update-downloaded', () => cb()),
   onUpdateError: (cb) => ipcRenderer.on('update-error', (_e, err) => cb(err)),
+  onUpdateChecking: (cb) => ipcRenderer.on('update-checking', () => cb()),
+  onUpdateNotAvailable: (cb) => ipcRenderer.on('update-not-available', () => cb()),
   downloadUpdate: () => ipcRenderer.send('download-update'),
   installUpdate: () => ipcRenderer.send('install-update'),
+  checkForUpdates: () => ipcRenderer.send('check-for-updates'),
 
   // L2 Backbone
   onChatHistory: (cb) => ipcRenderer.on('chat-history', (_e, msgs) => cb(msgs)),
