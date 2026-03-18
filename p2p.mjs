@@ -62,7 +62,7 @@ function log(...args) { try { console.log(...args) } catch {} }
 function warn(...args) { try { console.warn(...args) } catch {} }
 
 // ─── Bootstrap Phonebook Address (AWS) ───
-const BOOTSTRAP_NODE = '/dns4/relay.eatpan.com/tcp/9090/p2p/12D3KooWQRJdQ4zUHDtdUZRRcMG8ZFkZDrL8VFHRyUf29SdEKtut'
+const BOOTSTRAP_NODE = '/dns4/relay.eatpan.com/tcp/9090/p2p/12D3KooWRtx4QVXxdNExF7GwuUzCb8CBRLMm7Tk21EyUQ7dVwV8g'
 const BOOTSTRAP_ADDRS = (process.env.BOOTSTRAP_ADDRS || BOOTSTRAP_NODE)
   .split(',')
   .map(s => s.trim().replace(/["']/g, ''))

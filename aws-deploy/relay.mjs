@@ -1,19 +1,22 @@
 /**
- * relay.mjs — EatPan AWS DHT Phonebook + Circuit Relay
+ * relay.mjs — EatPan AWS DHT + GossipSub Mesh Node
  * 
- * Two roles:
- *   1. DHT Server (Phonebook) — peers register here, discover each other
- *   2. Circuit Relay Server — NAT'd peers connect THROUGH this relay
- *      to reach each other. Relay doesn't see message contents.
+ * Roles:
+ *   1. DHT Server (Phonebook) — peers register, discover each other
+ *   2. GossipSub Mesh Member — enables message forwarding between peers
+ *      that are connected to this relay but NOT to each other
+ *   3. Circuit Relay Server — optional NAT traversal bridge
  * 
- * This relay does NOT:
- *   - Subscribe to GossipSub topics
- *   - Process or forward messages
- *   - Act as a chat server
+ * How messaging works:
+ *   - Peer A (Electron/TCP) connects to relay
+ *   - Peer B (Browser/WSS) connects to relay
+ *   - Both subscribe to 'eatpan-chat' topic
+ *   - GossipSub sees: A ↔ Relay ↔ B (mesh formed)
+ *   - A publishes → relay forwards to B (standard GossipSub)
+ *   - Relay does NOT "process" messages — GossipSub handles it
  * 
- * Messaging flow:
- *   Peer A ──circuit-relay──▶ AWS ──circuit-relay──▶ Peer B
- *   Then GossipSub works directly between A and B (through the relay circuit)
+ * This is standard libp2p P2P networking — the relay is just
+ * another peer in the mesh, like any L4 node would be.
  * 
  * Ports:
  *   - TCP 9090 — Electron L4/L2/L1 clients
@@ -28,50 +31,29 @@ import { yamux } from '@chainsafe/libp2p-yamux'
 import { identify } from '@libp2p/identify'
 import { ping } from '@libp2p/ping'
 import { kadDHT } from '@libp2p/kad-dht'
+import { gossipsub } from '@chainsafe/libp2p-gossipsub'
 import { circuitRelayServer } from '@libp2p/circuit-relay-v2'
-import { readFileSync, existsSync } from 'fs'
 
-// Polyfill: Node 18 doesn't have CustomEvent
-if (typeof globalThis.CustomEvent === 'undefined') {
-  globalThis.CustomEvent = class CustomEvent extends Event {
-    constructor(type, params = {}) {
-      super(type, params)
-      this.detail = params.detail ?? null
-    }
-  }
-}
-
-// Polyfill: Promise.withResolvers (Node < 22)
+// Polyfill: Node < 22
 if (typeof Promise.withResolvers === 'undefined') {
   Promise.withResolvers = function () {
     let resolve, reject
-    const promise = new Promise((res, rej) => {
-      resolve = res
-      reject = rej
-    })
+    const promise = new Promise((res, rej) => { resolve = res; reject = rej })
     return { promise, resolve, reject }
+  }
+}
+if (typeof globalThis.CustomEvent === 'undefined') {
+  globalThis.CustomEvent = class CustomEvent extends Event {
+    constructor(type, params = {}) { super(type, params); this.detail = params.detail ?? null }
   }
 }
 
 const TCP_PORT = process.env.RELAY_TCP_PORT || 9090
 const WS_PORT  = process.env.RELAY_WS_PORT  || 9091
+const TOPIC    = 'eatpan-chat'
 
 async function startRelay() {
-  // Load persistent peer ID if available
-  let peerId
-  const keyPath = process.env.KEY_PATH || '/opt/eatpan/relay-key.json'
-  if (existsSync(keyPath)) {
-    try {
-      const { createFromJSON } = await import('@libp2p/peer-id-factory')
-      const keyData = JSON.parse(readFileSync(keyPath, 'utf-8'))
-      peerId = await createFromJSON(keyData)
-      console.log(`[Relay] Loaded peer ID: ${peerId.toString().substring(0, 24)}...`)
-    } catch (e) {
-      console.log(`[Relay] Could not load peer ID (${e.message}), generating new one`)
-    }
-  }
-
-  const config = {
+  const node = await createLibp2p({
     addresses: {
       listen: [
         `/ip4/0.0.0.0/tcp/${TCP_PORT}`,
@@ -88,70 +70,68 @@ async function startRelay() {
     services: {
       identify: identify(),
       ping: ping(),
-      // DHT Server mode — global phonebook
+      // DHT in server mode — phonebook
       dht: kadDHT({
         clientMode: false,
         protocol: '/eatpan/kad/1.0.0'
       }),
-      // Circuit Relay Server — helps NAT'd peers reach each other
+      // GossipSub — mesh member for message forwarding between peers
+      pubsub: gossipsub({
+        emitSelf: false,
+        allowPublishToZeroTopicPeers: true,
+        floodPublish: true,
+        heartbeatInterval: 1000,
+      }),
+      // Circuit Relay — helps NAT'd peers reach each other
       relay: circuitRelayServer({
         reservations: {
-          maxReservations: 200,        // max peers that can reserve a slot
-          reservationTtl: 300_000,     // 5 min reservation lifetime
-          defaultDataLimit: 1 << 24,   // 16 MB per reservation
+          maxReservations: 200,
+          reservationTtl: 300_000,
+          defaultDataLimit: 1 << 24,
         }
       })
     }
-  }
+  })
 
-  if (peerId) config.peerId = peerId
-
-  const node = await createLibp2p(config)
+  // Subscribe to chat topic — makes relay part of GossipSub mesh
+  node.services.pubsub.subscribe(TOPIC)
 
   const myPeerId = node.peerId.toString()
 
   console.log('═══════════════════════════════════════════')
-  console.log('  📖 EatPan AWS — DHT + Circuit Relay')
+  console.log('  🌐 EatPan AWS — DHT + GossipSub + Relay')
   console.log('═══════════════════════════════════════════')
   console.log(`  Peer ID: ${myPeerId}`)
-  console.log(`  TCP: ${TCP_PORT}  (Electron clients)`)
+  console.log(`  TCP: ${TCP_PORT}  (Electron)`)
   console.log(`  WS:  ${WS_PORT}  (nginx WSS → browsers)`)
-  console.log(`  Mode: DHT Phonebook + Circuit Relay`)
-  console.log(`  NO GossipSub — relay doesn't process messages`)
+  console.log(`  GossipSub topic: ${TOPIC}`)
   console.log('')
   console.log('  Multiaddrs:')
   for (const ma of node.getMultiaddrs()) {
     console.log(`    ${ma.toString()}`)
   }
   console.log('')
-  console.log(`  For clients, use:`)
+  console.log(`  Bootstrap addr for clients:`)
   console.log(`    TCP: /dns4/relay.eatpan.com/tcp/${TCP_PORT}/p2p/${myPeerId}`)
   console.log(`    WSS: /dns4/relay.eatpan.com/tcp/443/wss/p2p/${myPeerId}`)
   console.log('═══════════════════════════════════════════')
 
-  // ─── Connection logging ───
-  let connCount = 0
-  let relayCircuits = 0
-
+  // Connection tracking
   node.addEventListener('peer:connect', (evt) => {
-    connCount++
     const remote = evt.detail.toString()
-    console.log(`[Relay] + Connected: ${remote.substring(0, 20)}... (total: ${connCount})`)
+    console.log(`[Relay] + ${remote.substring(0, 24)}... (total: ${node.getConnections().length})`)
   })
-
   node.addEventListener('peer:disconnect', (evt) => {
-    connCount = Math.max(0, connCount - 1)
     const remote = evt.detail.toString()
-    console.log(`[Relay] - Disconnected: ${remote.substring(0, 20)}... (total: ${connCount})`)
+    console.log(`[Relay] - ${remote.substring(0, 24)}... (total: ${node.getConnections().length})`)
   })
 
-  // ─── Stats every 60s ───
+  // Stats every 60s
   setInterval(() => {
-    const conns = node.getConnections()
-    console.log(`[Relay] Active: ${conns.length} connections`)
+    const subs = node.services.pubsub.getSubscribers(TOPIC)
+    console.log(`[Relay] Conns: ${node.getConnections().length} | Topic subscribers: ${subs.length}`)
   }, 60_000)
 
-  // Graceful shutdown
   process.on('SIGINT', async () => {
     console.log('\n[Relay] Shutting down...')
     await node.stop()
@@ -160,6 +140,6 @@ async function startRelay() {
 }
 
 startRelay().catch((e) => {
-  console.error('Relay failed to start:', e)
+  console.error('Relay failed:', e)
   process.exit(1)
 })
