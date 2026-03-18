@@ -609,38 +609,25 @@
       }
     })
 
-    // New Group button — custom input (prompt() not supported in Electron)
+    // New Group button — always use custom input (prompt() throws in Electron)
     document.getElementById('newGroupBtn').addEventListener('click', () => {
-      const name = window.prompt ? window.prompt('Group name:') : null
-      // Fallback for Electron: use a temporary input
-      if (name === null && !window.prompt) {
-        const input = document.createElement('input')
-        input.placeholder = 'Group name...'
-        input.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:999;padding:12px 18px;border-radius:8px;background:#1a1a2e;border:1px solid #7c6aff;color:#fff;font-size:14px;font-family:Inter,sans-serif;outline:none;width:300px;'
-        document.body.appendChild(input)
-        input.focus()
-        const cleanup = () => { if (input.parentNode) input.parentNode.removeChild(input) }
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') {
-            const val = input.value.trim()
-            cleanup()
-            if (!val) return
-            window.eatpan.createGroup(val, []).then(room => {
-              if (room) { rooms.push(room); renderRooms(); switchRoom(room.id, room.topic, room.name) }
-            })
-          } else if (e.key === 'Escape') { cleanup() }
-        })
-        input.addEventListener('blur', cleanup)
-        return
-      }
-      if (!name) return
-      window.eatpan.createGroup(name, []).then(room => {
-        if (room) {
-          rooms.push(room)
-          renderRooms()
-          switchRoom(room.id, room.topic, room.name)
-        }
+      const input = document.createElement('input')
+      input.placeholder = 'Group name...'
+      input.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:999;padding:12px 18px;border-radius:8px;background:#1a1a2e;border:1px solid #7c6aff;color:#fff;font-size:14px;font-family:Inter,sans-serif;outline:none;width:300px;box-shadow:0 4px 20px rgba(0,0,0,0.5);'
+      document.body.appendChild(input)
+      input.focus()
+      const cleanup = () => { if (input.parentNode) input.parentNode.removeChild(input) }
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const val = input.value.trim()
+          cleanup()
+          if (!val) return
+          window.eatpan.createGroup(val, []).then(room => {
+            if (room) { rooms.push(room); renderRooms(); switchRoom(room.id, room.topic, room.name) }
+          })
+        } else if (e.key === 'Escape') { cleanup() }
       })
+      input.addEventListener('blur', cleanup)
     })
 
     // ═══════════════════════════════════════════

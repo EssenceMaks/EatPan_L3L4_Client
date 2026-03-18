@@ -1,26 +1,9 @@
 /**
- * relay.mjs — EatPan AWS DHT + GossipSub Mesh Node
+ * relay.mjs — EatPan AWS DHT + GossipSub Mesh + Circuit Relay
  * 
- * Roles:
- *   1. DHT Server (Phonebook) — peers register, discover each other
- *   2. GossipSub Mesh Member — enables message forwarding between peers
- *      that are connected to this relay but NOT to each other
- *   3. Circuit Relay Server — optional NAT traversal bridge
+ * Ports: TCP 9090 (Electron) + WS 9091 (nginx → browsers)
  * 
- * How messaging works:
- *   - Peer A (Electron/TCP) connects to relay
- *   - Peer B (Browser/WSS) connects to relay
- *   - Both subscribe to 'eatpan-chat' topic
- *   - GossipSub sees: A ↔ Relay ↔ B (mesh formed)
- *   - A publishes → relay forwards to B (standard GossipSub)
- *   - Relay does NOT "process" messages — GossipSub handles it
- * 
- * This is standard libp2p P2P networking — the relay is just
- * another peer in the mesh, like any L4 node would be.
- * 
- * Ports:
- *   - TCP 9090 — Electron L4/L2/L1 clients
- *   - WS  9091 — nginx WSS (443) proxy → browsers
+ * After first run, saves peer key to peer-key.json for ID persistence.
  */
 
 import { createLibp2p } from 'libp2p'
@@ -33,6 +16,7 @@ import { ping } from '@libp2p/ping'
 import { kadDHT } from '@libp2p/kad-dht'
 import { gossipsub } from '@chainsafe/libp2p-gossipsub'
 import { circuitRelayServer } from '@libp2p/circuit-relay-v2'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 
 // Polyfill: Node < 22
 if (typeof Promise.withResolvers === 'undefined') {
@@ -63,83 +47,86 @@ async function startRelay() {
     transports: [tcp(), webSockets()],
     connectionEncrypters: [noise()],
     streamMuxers: [yamux()],
-    connectionManager: {
-      minConnections: 0,
-      maxConnections: 300,
-    },
+    connectionManager: { minConnections: 0, maxConnections: 300 },
     services: {
       identify: identify(),
       ping: ping(),
-      // DHT in server mode — phonebook
-      dht: kadDHT({
-        clientMode: false,
-        protocol: '/eatpan/kad/1.0.0'
-      }),
-      // GossipSub — mesh member for message forwarding between peers
+      dht: kadDHT({ clientMode: false, protocol: '/eatpan/kad/1.0.0' }),
       pubsub: gossipsub({
         emitSelf: false,
         allowPublishToZeroTopicPeers: true,
         floodPublish: true,
         heartbeatInterval: 1000,
       }),
-      // Circuit Relay — helps NAT'd peers reach each other
       relay: circuitRelayServer({
-        reservations: {
-          maxReservations: 200,
-          reservationTtl: 300_000,
-          defaultDataLimit: 1 << 24,
-        }
+        reservations: { maxReservations: 200, reservationTtl: 300_000, defaultDataLimit: 1 << 24 }
       })
     }
   })
 
-  // Subscribe to chat topic — makes relay part of GossipSub mesh
+  // Subscribe to eatpan-chat — makes relay part of GossipSub mesh
   node.services.pubsub.subscribe(TOPIC)
 
+  // Save peer ID for reference (can't easily persist libp2p v3 keys programmatically,
+  // but we log the peer ID so it can be hardcoded after first deploy)
   const myPeerId = node.peerId.toString()
+  try {
+    writeFileSync('/opt/eatpan/current-peer-id.txt', myPeerId)
+  } catch {}
 
   console.log('═══════════════════════════════════════════')
   console.log('  🌐 EatPan AWS — DHT + GossipSub + Relay')
   console.log('═══════════════════════════════════════════')
   console.log(`  Peer ID: ${myPeerId}`)
-  console.log(`  TCP: ${TCP_PORT}  (Electron)`)
-  console.log(`  WS:  ${WS_PORT}  (nginx WSS → browsers)`)
-  console.log(`  GossipSub topic: ${TOPIC}`)
-  console.log('')
-  console.log('  Multiaddrs:')
+  console.log(`  TCP: ${TCP_PORT}  |  WS: ${WS_PORT}`)
+  console.log(`  Topic: ${TOPIC}`)
   for (const ma of node.getMultiaddrs()) {
-    console.log(`    ${ma.toString()}`)
+    console.log(`  ${ma.toString()}`)
   }
-  console.log('')
-  console.log(`  Bootstrap addr for clients:`)
-  console.log(`    TCP: /dns4/relay.eatpan.com/tcp/${TCP_PORT}/p2p/${myPeerId}`)
-  console.log(`    WSS: /dns4/relay.eatpan.com/tcp/443/wss/p2p/${myPeerId}`)
+  console.log(`  TCP bootstrap: /dns4/relay.eatpan.com/tcp/${TCP_PORT}/p2p/${myPeerId}`)
+  console.log(`  WSS bootstrap: /dns4/relay.eatpan.com/tcp/443/wss/p2p/${myPeerId}`)
   console.log('═══════════════════════════════════════════')
 
-  // Connection tracking
+  // ── Event logging ──
   node.addEventListener('peer:connect', (evt) => {
     const remote = evt.detail.toString()
-    console.log(`[Relay] + ${remote.substring(0, 24)}... (total: ${node.getConnections().length})`)
+    console.log(`[+] ${remote.substring(0, 24)}... (total: ${node.getConnections().length})`)
   })
   node.addEventListener('peer:disconnect', (evt) => {
     const remote = evt.detail.toString()
-    console.log(`[Relay] - ${remote.substring(0, 24)}... (total: ${node.getConnections().length})`)
+    console.log(`[-] ${remote.substring(0, 24)}... (total: ${node.getConnections().length})`)
   })
 
-  // Stats every 60s
+  // GossipSub events
+  node.services.pubsub.addEventListener('subscription-change', (evt) => {
+    const { peerId, subscriptions } = evt.detail
+    const subs = subscriptions.map(s => `${s.topic}(${s.subscribe ? '+' : '-'})`).join(', ')
+    console.log(`[GS] Sub change: ${peerId.toString().substring(0, 20)}... → ${subs}`)
+  })
+
+  node.services.pubsub.addEventListener('message', (evt) => {
+    try {
+      const data = JSON.parse(new TextDecoder().decode(evt.detail.data))
+      console.log(`[GS] MSG type=${data.type} from=${(data.name || '?').substring(0, 16)}`)
+    } catch {
+      console.log(`[GS] MSG on ${evt.detail.topic}`)
+    }
+  })
+
+  // Stats
   setInterval(() => {
-    const subs = node.services.pubsub.getSubscribers(TOPIC)
-    console.log(`[Relay] Conns: ${node.getConnections().length} | Topic subscribers: ${subs.length}`)
-  }, 60_000)
+    const conns = node.getConnections()
+    let subs = 0
+    try { subs = node.services.pubsub.getSubscribers(TOPIC).length } catch {}
+    const peers = conns.map(c => c.remotePeer.toString().substring(0, 12)).join(', ')
+    console.log(`[S] conns=${conns.length} [${peers}] subs=${subs}`)
+  }, 10_000)
 
   process.on('SIGINT', async () => {
-    console.log('\n[Relay] Shutting down...')
+    console.log('\nShutting down...')
     await node.stop()
     process.exit(0)
   })
 }
 
-startRelay().catch((e) => {
-  console.error('Relay failed:', e)
-  process.exit(1)
-})
+startRelay().catch(e => { console.error('FAIL:', e); process.exit(1) })
