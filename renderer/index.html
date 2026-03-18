@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EatPan</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121e;
+      --bg-tertiary: #1a1a2e;
+      --bg-hover: #22223a;
+      --accent: #7c6aff;
+      --accent-glow: rgba(124, 106, 255, 0.3);
+      --green: #4ade80;
+      --green-dim: rgba(74, 222, 128, 0.15);
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --text-primary: #f0f0f4;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --border: rgba(255,255,255,0.08);
+      --border-hover: rgba(255,255,255,0.18);
+      --radius: 12px;
+      --sidebar-w: 260px;
+      --topbar-h: 52px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* ─── SIDEBAR ─── */
+    .sidebar {
+      width: var(--sidebar-w);
+      min-width: var(--sidebar-w);
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+    }
+
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sidebar-logo {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--green));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 800; color: #fff;
+    }
+
+    .sidebar-title {
+      font-size: 15px; font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--green));
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .level-badge {
+      margin-left: auto;
+      font-size: 10px; font-weight: 800;
+      padding: 3px 8px; border-radius: 20px;
+      background: var(--green-dim); color: var(--green);
+      letter-spacing: 1px;
+      transition: all 0.3s;
+    }
+
+    .level-badge.l3 {
+      background: rgba(124, 106, 255, 0.15);
+      color: var(--accent);
+    }
+
+    /* Sidebar sections */
+    .sidebar-section { padding: 8px 0; }
+    .sidebar-section-title {
+      padding: 4px 16px; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1px;
+      color: var(--text-muted);
+    }
+
+    .room-item {
+      padding: 10px 16px;
+      display: flex; align-items: center; gap: 10px;
+      cursor: pointer; transition: background 0.15s;
+      border-left: 3px solid transparent;
+    }
+    .room-item:hover { background: var(--bg-hover); }
+    .room-item.active {
+      background: var(--bg-tertiary);
+      border-left-color: var(--accent);
+    }
+    .room-icon { font-size: 18px; }
+    .room-info { flex: 1; min-width: 0; }
+    .room-name {
+      font-size: 13px; font-weight: 600; color: var(--text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .room-preview {
+      font-size: 11px; color: var(--text-muted); margin-top: 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .room-unread {
+      background: var(--accent); color: #fff;
+      font-size: 10px; font-weight: 700;
+      min-width: 18px; height: 18px;
+      border-radius: 9px; display: flex;
+      align-items: center; justify-content: center;
+      padding: 0 4px;
+    }
+
+    /* Peers section */
+    .peers-section {
+      border-top: 1px solid var(--border);
+      padding: 12px 0; margin-top: auto;
+    }
+    .peer-item {
+      padding: 6px 16px;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--text-secondary);
+      cursor: pointer; transition: background 0.15s;
+    }
+    .peer-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .peer-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+    }
+    .peer-dot.relay { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+    .peer-dot.bootstrap { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    .peer-dot.self { background: #fff; box-shadow: 0 0 6px #fff; }
+    .peer-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .peer-route {
+      font-size: 9px; padding: 2px 5px; border-radius: 4px;
+      background: rgba(255,255,255,0.05); color: var(--text-muted);
+    }
+
+    /* Sidebar bottom bar */
+    .sidebar-bottom {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex; gap: 8px;
+    }
+    .sidebar-btn {
+      flex: 1; padding: 8px; border-radius: 8px;
+      background: var(--bg-tertiary); border: 1px solid var(--border);
+      color: var(--text-secondary); font-size: 11px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; text-align: center;
+    }
+    .sidebar-btn:hover {
+      background: var(--bg-hover); border-color: var(--border-hover);
+      color: var(--text-primary);
+    }
+    .sidebar-btn.seeder-active {
+      background: rgba(124, 106, 255, 0.15);
+      border-color: rgba(124, 106, 255, 0.3);
+      color: var(--accent);
+    }
+
+    /* ─── MAIN CHAT AREA ─── */
+    .main {
+      flex: 1; display: flex; flex-direction: column;
+      min-width: 0;
+    }
+
+    /* Topbar */
+    .topbar {
+      height: var(--topbar-h);
+      padding: 0 20px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .topbar-room-name {
+      font-size: 14px; font-weight: 700; color: var(--text-primary);
+    }
+    .topbar-status {
+      font-size: 11px; color: var(--text-muted);
+      margin-left: auto;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      display: inline-block;
+    }
+    .status-dot.online { background: var(--green); box-shadow: 0 0 4px var(--green); }
+    .status-dot.offline { background: var(--red); }
+
+    /* Messages */
+    .messages {
+      flex: 1; overflow-y: auto; padding: 20px;
+      display: flex; flex-direction: column; gap: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.1) transparent;
+    }
+    .messages::-webkit-scrollbar { width: 6px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+    .msg {
+      max-width: 70%; padding: 10px 14px;
+      border-radius: 16px; font-size: 13px; line-height: 1.5;
+      animation: msgIn 0.2s ease-out;
+      position: relative;
+    }
+    @keyframes msgIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .msg.incoming {
+      align-self: flex-start;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+    .msg.outgoing {
+      align-self: flex-end;
+      background: linear-gradient(135deg, rgba(124,106,255,0.3), rgba(74,222,128,0.15));
+      border: 1px solid rgba(124,106,255,0.2);
+      border-bottom-right-radius: 4px;
+    }
+    .msg.history {
+      opacity: 0.6;
+    }
+
+    .msg-sender {
+      font-size: 11px; font-weight: 700; margin-bottom: 3px;
+      color: var(--accent);
+    }
+    .msg.outgoing .msg-sender {
+      color: var(--green);
+    }
+
+    .msg-text { word-break: break-word; }
+
+    .msg-meta {
+      display: flex; justify-content: flex-end; gap: 8px;
+      margin-top: 4px; font-size: 9px; color: var(--text-muted);
+    }
+    .msg-route {
+      padding: 1px 5px; border-radius: 3px;
+      background: rgba(255,255,255,0.05);
+    }
+
+    /* System messages */
+    .msg-system {
+      align-self: center; text-align: center;
+      font-size: 11px; color: var(--text-muted);
+      padding: 6px 16px; border-radius: 20px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    /* Input area */
+    .input-area {
+      padding: 12px 20px;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .input-area input {
+      flex: 1; padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 24px; color: var(--text-primary);
+      font-size: 13px; font-family: inherit;
+      outline: none; transition: border-color 0.2s;
+    }
+    .input-area input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+    .input-area input::placeholder { color: var(--text-muted); }
+
+    .send-btn {
+      width: 42px; height: 42px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #5b4fd4);
+      border: none; color: #fff; font-size: 18px;
+      cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .send-btn:hover {
+      transform: scale(1.08);
+      box-shadow: 0 4px 16px var(--accent-glow);
+    }
+    .send-btn:active { transform: scale(0.95); }
+
+    /* Update banner */
+    .update-banner {
+      display: none;
+      padding: 8px 20px;
+      background: linear-gradient(90deg, rgba(124,106,255,0.15), rgba(74,222,128,0.1));
+      border-bottom: 1px solid rgba(124,106,255,0.2);
+      font-size: 12px; color: var(--text-primary);
+      align-items: center; gap: 10px;
+    }
+    .update-banner.show { display: flex; }
+    .update-banner button {
+      padding: 4px 12px; border-radius: 6px;
+      background: var(--accent); color: #fff; border: none;
+      font-size: 11px; cursor: pointer; font-weight: 600;
+    }
+
+    /* Seeder stats panel */
+    .seeder-panel {
+      display: none;
+      padding: 12px 16px;
+      background: rgba(124, 106, 255, 0.08);
+      border-top: 1px solid rgba(124, 106, 255, 0.15);
+      font-size: 11px; color: var(--text-secondary);
+    }
+    .seeder-panel.show { display: block; }
+    .seeder-panel .stat-row {
+      display: flex; justify-content: space-between;
+      padding: 2px 0;
+    }
+    .seeder-panel .stat-val { color: var(--accent); font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">E</div>
+      <span class="sidebar-title">EatPan</span>
+      <span class="level-badge" id="levelBadge">L4</span>
+    </div>
+
+    <!-- Rooms -->
+    <div class="sidebar-section" id="roomsSection">
+      <div class="sidebar-section-title">Rooms</div>
+      <div id="roomsList"></div>
+    </div>
+
+    <!-- Peers -->
+    <div class="peers-section">
+      <div class="sidebar-section-title">Online Peers <span id="peerCount">(0)</span></div>
+      <div id="peersList"></div>
+    </div>
+
+    <!-- Seeder Stats -->
+    <div class="seeder-panel" id="seederPanel">
+      <div style="font-weight:700;margin-bottom:6px;color:var(--accent)">⚡ L3 Seeder Stats</div>
+      <div class="stat-row"><span>Uptime</span><span class="stat-val" id="seederUptime">0s</span></div>
+      <div class="stat-row"><span>Received</span><span class="stat-val" id="seederReceived">0</span></div>
+      <div class="stat-row"><span>Buffer</span><span class="stat-val" id="seederBuffer">0</span></div>
+      <div class="stat-row"><span>Relayed</span><span class="stat-val" id="seederRelayed">0</span></div>
+    </div>
+
+    <!-- Bottom Actions -->
+    <div class="sidebar-bottom">
+      <button class="sidebar-btn" id="seederToggle" title="Toggle L3 Seeder Mode">⚡ Seeder</button>
+      <button class="sidebar-btn" id="newGroupBtn" title="Create Group">+ Group</button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- Update Banner -->
+    <div class="update-banner" id="updateBanner">
+      <span id="updateText">Update available!</span>
+      <button id="updateBtn" onclick="handleUpdate()">Download</button>
+    </div>
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <span class="topbar-room-name" id="topbarRoomName">🌍 Global Chat</span>
+      <div class="topbar-status">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="messages" id="messagesContainer"></div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off">
+      <button class="send-btn" id="sendBtn">➤</button>
+    </div>
+  </div>
+
+  <script>
+    // ═══════════════════════════════════════════
+    //  State
+    // ═══════════════════════════════════════════
+    let myPeerId = null
+    let currentRoom = 'global'
+    let currentTopic = 'eatpan-chat'
+    let rooms = []
+    let peers = {}
+    let seederActive = false
+
+    // ═══════════════════════════════════════════
+    //  Init
+    // ═══════════════════════════════════════════
+    async function init() {
+      const status = await window.eatpan.getStatus()
+      if (status) {
+        myPeerId = status.peerId
+        document.getElementById('statusDot').classList.add('online')
+        document.getElementById('statusText').textContent =
+          `${status.name} • ${status.connections} conn`
+      }
+
+      // Load rooms
+      rooms = await window.eatpan.getRooms()
+      renderRooms()
+    }
+
+    setTimeout(init, 500)
+
+    // ═══════════════════════════════════════════
+    //  Chat
+    // ═══════════════════════════════════════════
+    const chatInput = document.getElementById('chatInput')
+    const sendBtn = document.getElementById('sendBtn')
+    const messagesContainer = document.getElementById('messagesContainer')
+
+    function sendMessage() {
+      const text = chatInput.value.trim()
+      if (!text) return
+      window.eatpan.sendMessage(text, currentTopic === 'eatpan-chat' ? undefined : currentTopic)
+      chatInput.value = ''
+    }
+
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
+    })
+    sendBtn.addEventListener('click', sendMessage)
+
+    window.eatpan.onChatMessage((msg) => {
+      const topic = msg.room_topic || 'eatpan-chat'
+      if (topic === currentTopic) {
+        appendMessage(msg)
+      }
+    })
+
+    window.eatpan.onChatHistory((msgs) => {
+      for (const msg of msgs) {
+        appendMessage(msg, true)
+      }
+    })
+
+    function appendMessage(msg, isHistory = false) {
+      const div = document.createElement('div')
+      const isOwn = msg.peerId === myPeerId
+      div.className = `msg ${isOwn ? 'outgoing' : 'incoming'} ${isHistory || msg.isHistory ? 'history' : ''}`
+
+      const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      const route = msg.route || ''
+
+      div.innerHTML = `
+        <div class="msg-sender">${escapeHtml(msg.from || 'Unknown')}</div>
+        <div class="msg-text">${escapeHtml(msg.text)}</div>
+        <div class="msg-meta">
+          ${route ? `<span class="msg-route">${route}</span>` : ''}
+          <span>${time}</span>
+        </div>
+      `
+      messagesContainer.appendChild(div)
+      messagesContainer.scrollTop = messagesContainer.scrollHeight
+    }
+
+    function addSystemMessage(text) {
+      const div = document.createElement('div')
+      div.className = 'msg-system'
+      div.textContent = text
+      messagesContainer.appendChild(div)
+      messagesContainer.scrollTop = messagesContainer.scrollHeight
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement('div')
+      d.textContent = s
+      return d.innerHTML
+    }
+
+    // ═══════════════════════════════════════════
+    //  Peers
+    // ═══════════════════════════════════════════
+    window.eatpan.onPeersUpdate((p) => {
+      peers = p
+      renderPeers()
+      // Update status bar
+      const count = Object.keys(peers).length
+      const el = document.getElementById('statusText')
+      if (myPeerId) {
+        const info = peers[myPeerId]
+        if (info) el.textContent = `${info.name} • ${count} peer${count !== 1 ? 's' : ''}`
+      }
+    })
+
+    window.eatpan.onPeerConnected((id) => {
+      addSystemMessage(`✦ Peer connected: ${id.substring(0, 12)}...`)
+    })
+
+    window.eatpan.onPeerDisconnected((id) => {
+      addSystemMessage(`✧ Peer disconnected: ${id.substring(0, 12)}...`)
+    })
+
+    function renderPeers() {
+      const list = document.getElementById('peersList')
+      const countEl = document.getElementById('peerCount')
+      const entries = Object.entries(peers)
+      countEl.textContent = `(${entries.length})`
+
+      list.innerHTML = entries.map(([id, info]) => {
+        const isSelf = id === myPeerId
+        const dotClass = isSelf ? 'self' :
+          info.route === 'direct' ? '' :
+          info.route === 'dht-bootstrap' ? 'bootstrap' : 'relay'
+        const level = info.level || 'L4'
+
+        return `
+          <div class="peer-item" onclick="openDM('${id}', '${escapeHtml(info.name || id.substring(0,12))}')">
+            <div class="peer-dot ${dotClass}"></div>
+            <span class="peer-name">${escapeHtml(info.name || id.substring(0, 12))}${isSelf ? ' (you)' : ''}</span>
+            <span class="peer-route">${level}</span>
+            <span class="peer-route">${info.route || ''}</span>
+          </div>
+        `
+      }).join('')
+    }
+
+    // ═══════════════════════════════════════════
+    //  Rooms
+    // ═══════════════════════════════════════════
+    function renderRooms() {
+      const list = document.getElementById('roomsList')
+      list.innerHTML = rooms.map(room => {
+        const icon = room.type === 'global' ? '🌍' : room.type === 'dm' ? '💬' : '👥'
+        const preview = room.lastMessage ? room.lastMessage.text : ''
+        return `
+          <div class="room-item ${room.id === currentRoom ? 'active' : ''}"
+               onclick="switchRoom('${room.id}', '${room.topic}', '${escapeHtml(room.name)}')">
+            <span class="room-icon">${icon}</span>
+            <div class="room-info">
+              <div class="room-name">${escapeHtml(room.name)}</div>
+              ${preview ? `<div class="room-preview">${escapeHtml(preview)}</div>` : ''}
+            </div>
+            ${room.unread > 0 ? `<span class="room-unread">${room.unread}</span>` : ''}
+          </div>
+        `
+      }).join('')
+    }
+
+    function switchRoom(roomId, topic, name) {
+      currentRoom = roomId
+      currentTopic = topic
+      document.getElementById('topbarRoomName').textContent = name
+      messagesContainer.innerHTML = ''
+
+      // Reset unread
+      window.eatpan.resetUnread(roomId)
+
+      // Re-render rooms to update active state
+      rooms.forEach(r => { if (r.id === roomId) r.unread = 0 })
+      renderRooms()
+    }
+
+    function openDM(peerId, peerName) {
+      if (peerId === myPeerId) return
+      window.eatpan.createDM(peerId, peerName).then(room => {
+        if (room) {
+          // Add to rooms list if not already there
+          if (!rooms.find(r => r.id === room.id)) rooms.push(room)
+          renderRooms()
+          switchRoom(room.id, room.topic, room.name)
+        }
+      })
+    }
+
+    window.eatpan.onRoomUpdate((room) => {
+      const idx = rooms.findIndex(r => r.id === room.id)
+      if (idx >= 0) rooms[idx] = room
+      else rooms.push(room)
+      renderRooms()
+    })
+
+    window.eatpan.onRoomInvite((data) => {
+      if (confirm(`${data.from} invited you to join "${data.roomName}". Accept?`)) {
+        window.eatpan.joinGroup(data.roomTopic, data.roomName).then(room => {
+          if (room) {
+            rooms.push(room)
+            renderRooms()
+            switchRoom(room.id, room.topic, room.name)
+          }
+        })
+      }
+    })
+
+    // New Group button
+    document.getElementById('newGroupBtn').addEventListener('click', () => {
+      const name = prompt('Group name:')
+      if (!name) return
+      window.eatpan.createGroup(name, []).then(room => {
+        if (room) {
+          rooms.push(room)
+          renderRooms()
+          switchRoom(room.id, room.topic, room.name)
+        }
+      })
+    })
+
+    // ═══════════════════════════════════════════
+    //  Seeder Mode
+    // ═══════════════════════════════════════════
+    const seederToggle = document.getElementById('seederToggle')
+    const seederPanel = document.getElementById('seederPanel')
+    const levelBadge = document.getElementById('levelBadge')
+
+    seederToggle.addEventListener('click', async () => {
+      if (seederActive) {
+        const result = await window.eatpan.seederDeactivate()
+        if (result.success) {
+          seederActive = false
+          seederToggle.classList.remove('seeder-active')
+          seederToggle.textContent = '⚡ Seeder'
+          seederPanel.classList.remove('show')
+          levelBadge.textContent = 'L4'
+          levelBadge.classList.remove('l3')
+          addSystemMessage('⬇ L3 Seeder Mode deactivated')
+        }
+      } else {
+        const result = await window.eatpan.seederActivate()
+        if (result.success) {
+          seederActive = true
+          seederToggle.classList.add('seeder-active')
+          seederToggle.textContent = '⚡ Active!'
+          seederPanel.classList.add('show')
+          levelBadge.textContent = 'L3+L4'
+          levelBadge.classList.add('l3')
+          addSystemMessage('⬆ L3 Seeder Mode activated — sharing resources with the network!')
+          startSeederStatsPolling()
+        } else {
+          alert('Failed to activate seeder: ' + (result.reason || 'unknown'))
+        }
+      }
+    })
+
+    window.eatpan.onSeederChanged((stats) => {
+      if (stats?.active) updateSeederStats(stats)
+    })
+
+    let seederStatsInterval = null
+    function startSeederStatsPolling() {
+      if (seederStatsInterval) return
+      seederStatsInterval = setInterval(async () => {
+        if (!seederActive) { clearInterval(seederStatsInterval); seederStatsInterval = null; return }
+        const stats = await window.eatpan.seederStats()
+        if (stats) updateSeederStats(stats)
+      }, 3000)
+    }
+
+    function updateSeederStats(stats) {
+      document.getElementById('seederUptime').textContent = stats.uptimeFormatted || '0s'
+      document.getElementById('seederReceived').textContent = stats.totalReceived || 0
+      document.getElementById('seederBuffer').textContent = stats.buffer || 0
+      document.getElementById('seederRelayed').textContent = stats.totalRelayed || 0
+    }
+
+    // ═══════════════════════════════════════════
+    //  Auto-Update
+    // ═══════════════════════════════════════════
+    let updateState = 'idle' // idle, available, downloading, ready
+
+    window.eatpan.onUpdateAvailable((info) => {
+      updateState = 'available'
+      document.getElementById('updateBanner').classList.add('show')
+      document.getElementById('updateText').textContent = `Update ${info.version} available!`
+      document.getElementById('updateBtn').textContent = 'Download'
+    })
+
+    window.eatpan.onUpdateProgress((p) => {
+      updateState = 'downloading'
+      document.getElementById('updateBtn').textContent = `${p.percent}%`
+    })
+
+    window.eatpan.onUpdateDownloaded(() => {
+      updateState = 'ready'
+      document.getElementById('updateText').textContent = 'Update downloaded!'
+      document.getElementById('updateBtn').textContent = 'Install & Restart'
+    })
+
+    window.eatpan.onUpdateError((err) => {
+      document.getElementById('updateText').textContent = `Update error: ${err.message}`
+    })
+
+    function handleUpdate() {
+      if (updateState === 'available') {
+        window.eatpan.downloadUpdate()
+      } else if (updateState === 'ready') {
+        window.eatpan.installUpdate()
+      }
+    }
+
+    // ═══════════════════════════════════════════
+    //  Refresh status periodically
+    // ═══════════════════════════════════════════
+    setInterval(async () => {
+      const status = await window.eatpan.getStatus()
+      if (status) {
+        myPeerId = status.peerId
+        const dotEl = document.getElementById('statusDot')
+        dotEl.className = 'status-dot ' + (status.connections > 0 ? 'online' : 'offline')
+      }
+    }, 5000)
+  </script>
+</body>
+</html>

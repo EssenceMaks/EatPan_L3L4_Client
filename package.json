@@ -1,0 +1,96 @@
+{
+  "name": "eatpan-l4l3-client",
+  "version": "1.0.0",
+  "description": "EatPan L4/L3 — Decentralized P2P Chat Client with Seeder Mode",
+  "author": "EssenceMaks <admin@eatpan.com>",
+  "license": "MIT",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "node launch.cjs",
+    "dev": "node launch.cjs --dev",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "dependencies": {
+    "@chainsafe/libp2p-gossipsub": "^14.1.2",
+    "@chainsafe/libp2p-noise": "^17.0.0",
+    "@chainsafe/libp2p-yamux": "^8.0.1",
+    "@libp2p/bootstrap": "^12.0.14",
+    "@libp2p/circuit-relay-v2": "^4.1.6",
+    "@libp2p/identify": "^4.0.13",
+    "@libp2p/kad-dht": "^16.1.6",
+    "@libp2p/mdns": "^12.0.14",
+    "@libp2p/ping": "^3.0.13",
+    "@libp2p/tcp": "^11.0.13",
+    "@libp2p/websockets": "^10.1.6",
+    "@multiformats/multiaddr": "^12.3.5",
+    "electron-updater": "^6.3.0",
+    "libp2p": "^3.1.6",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.eatpan.l4l3client",
+    "productName": "EatPan",
+    "icon": "assets/icon.png",
+    "directories": {
+      "output": "dist"
+    },
+    "artifactName": "${productName}-Setup-${version}.${ext}",
+    "files": [
+      "main.cjs",
+      "p2p.mjs",
+      "seeder.mjs",
+      "backbone-sync.mjs",
+      "rooms.mjs",
+      "contacts.mjs",
+      "polyfill.mjs",
+      "preload.cjs",
+      "launch.cjs",
+      "renderer/**/*",
+      "assets/**/*",
+      "LICENSE.txt",
+      "node_modules/**/*",
+      "!node_modules/electron/**/*",
+      "!node_modules/electron-builder/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.social-networking",
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Network",
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "license": "LICENSE.txt",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "EssenceMaks",
+        "repo": "EatPan_P4_Terminal"
+      }
+    ]
+  }
+}
