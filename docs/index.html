@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EatPan — Decentralized Chat</title>
+  <meta name="description" content="EatPan: A decentralized P2P chat ecosystem built on libp2p with DHT discovery, offline caching, and L3 seeder mode.">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #050510; --bg2: #0c0c1d; --bg3: #161630;
+      --purple: #a78bfa; --purple2: #8b5cf6;
+      --blue: #60a5fa; --green: #4ade80; --gold: #facc15;
+      --text: #f0f0f5; --text2: #94a3b8; --text3: #64748b;
+      --glow-purple: rgba(167,139,250,0.3);
+      --glow-blue: rgba(96,165,250,0.2);
+    }
+    body {
+      font-family: 'Inter', sans-serif; background: var(--bg);
+      color: var(--text); min-height: 100vh; overflow-x: hidden;
+    }
+
+    /* ═══ HERO ═══ */
+    .hero {
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 40px 20px;
+      position: relative;
+      background: radial-gradient(ellipse at center, rgba(167,139,250,0.08) 0%, transparent 70%);
+    }
+    .hero::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(96,165,250,0.06) 0%, transparent 40%),
+        radial-gradient(circle at 80% 60%, rgba(167,139,250,0.06) 0%, transparent 40%),
+        radial-gradient(circle at 50% 90%, rgba(74,222,128,0.04) 0%, transparent 30%);
+      pointer-events: none;
+    }
+    .hero-logo {
+      width: 100px; height: 100px; border-radius: 24px;
+      background: linear-gradient(135deg, var(--purple), var(--blue));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 50px; margin-bottom: 32px;
+      box-shadow: 0 0 60px var(--glow-purple), 0 0 120px rgba(96,165,250,0.15);
+      animation: float 4s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-12px); }
+    }
+    .hero h1 {
+      font-size: clamp(38px, 6vw, 72px); font-weight: 900;
+      background: linear-gradient(135deg, var(--purple), var(--blue), var(--green));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 16px;
+    }
+    .hero-sub {
+      font-size: clamp(16px, 2vw, 22px); color: var(--text2);
+      max-width: 600px; line-height: 1.6; margin-bottom: 40px;
+    }
+    .hero-actions { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+    .btn {
+      padding: 14px 32px; border-radius: 12px;
+      font-size: 15px; font-weight: 700; cursor: pointer;
+      text-decoration: none; display: inline-flex;
+      align-items: center; gap: 8px; transition: all 0.3s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--purple2), var(--blue));
+      color: #fff; border: none;
+      box-shadow: 0 4px 24px var(--glow-purple);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 40px var(--glow-purple);
+    }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid rgba(167,139,250,0.3);
+      color: var(--purple);
+    }
+    .btn-outline:hover {
+      background: rgba(167,139,250,0.08);
+      border-color: rgba(167,139,250,0.5);
+      transform: translateY(-2px);
+    }
+
+    /* ═══ FEATURES ═══ */
+    .features {
+      padding: 80px 20px; max-width: 1200px; margin: 0 auto;
+    }
+    .features h2 {
+      text-align: center; font-size: 36px; font-weight: 900;
+      margin-bottom: 48px;
+    }
+    .features-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--bg2); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px; padding: 28px;
+      transition: all 0.3s;
+    }
+    .feature-card:hover {
+      border-color: rgba(167,139,250,0.2);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    .feature-icon {
+      font-size: 32px; margin-bottom: 16px;
+    }
+    .feature-card h3 {
+      font-size: 18px; font-weight: 800; margin-bottom: 8px;
+    }
+    .feature-card p {
+      font-size: 14px; color: var(--text2); line-height: 1.6;
+    }
+
+    /* ═══ ARCHITECTURE ═══ */
+    .arch {
+      padding: 80px 20px; max-width: 1000px; margin: 0 auto;
+    }
+    .arch h2 {
+      text-align: center; font-size: 36px; font-weight: 900;
+      margin-bottom: 48px;
+    }
+    .arch-flow {
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .arch-node {
+      display: flex; align-items: center; gap: 16px;
+      background: var(--bg2); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; padding: 20px;
+      transition: all 0.3s;
+    }
+    .arch-node:hover {
+      border-color: rgba(167,139,250,0.2);
+    }
+    .arch-level {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 900; flex-shrink: 0;
+    }
+    .level-l4 { background: rgba(74,222,128,0.15); color: var(--green); }
+    .level-l3 { background: rgba(167,139,250,0.15); color: var(--purple); }
+    .level-l2 { background: rgba(96,165,250,0.15); color: var(--blue); }
+    .level-l1 { background: rgba(250,204,21,0.15); color: var(--gold); }
+    .arch-info { flex: 1; }
+    .arch-info h4 { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
+    .arch-info p { font-size: 13px; color: var(--text2); }
+    .arch-arrow {
+      text-align: center; font-size: 24px; color: var(--text3);
+    }
+
+    /* ═══ DOWNLOAD ═══ */
+    .download {
+      padding: 80px 20px; text-align: center;
+      background: radial-gradient(ellipse at center, rgba(96,165,250,0.06) 0%, transparent 60%);
+    }
+    .download h2 {
+      font-size: 36px; font-weight: 900; margin-bottom: 16px;
+    }
+    .download p {
+      font-size: 16px; color: var(--text2); margin-bottom: 32px;
+    }
+    .download-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px; max-width: 900px; margin: 0 auto;
+    }
+    .dl-card {
+      background: var(--bg2); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px; padding: 28px;
+      text-align: center; transition: all 0.3s;
+    }
+    .dl-card:hover {
+      border-color: rgba(167,139,250,0.2);
+      transform: translateY(-4px);
+    }
+    .dl-card h3 { font-size: 18px; margin-bottom: 8px; }
+    .dl-card p { font-size: 13px; color: var(--text2); margin-bottom: 16px; }
+    .dl-card .btn { width: 100%; justify-content: center; }
+    .dl-icon { font-size: 36px; margin-bottom: 12px; }
+
+    /* ═══ FOOTER ═══ */
+    footer {
+      padding: 40px 20px; text-align: center;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      color: var(--text3); font-size: 13px;
+    }
+    footer a { color: var(--purple); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-logo">🍳</div>
+    <h1>EatPan</h1>
+    <p class="hero-sub">
+      Decentralized P2P chat ecosystem. No servers, no censorship, no limits.
+      Built on libp2p with DHT discovery, offline caching, and auto-updates.
+    </p>
+    <div class="hero-actions">
+      <a href="https://github.com/EssenceMaks/EatPan_P4_Terminal/releases" class="btn btn-primary">
+        ⬇ Download Client
+      </a>
+      <a href="https://github.com/EssenceMaks/EatPan_P4_Terminal" class="btn btn-outline">
+        ⭐ GitHub
+      </a>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="features">
+    <h2>Features</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🔗</div>
+        <h3>DHT Discovery Chain</h3>
+        <p>Automatic peer discovery: L2 → L1 → AWS DHT fallback. No single point of failure.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📡</div>
+        <h3>GossipSub Messaging</h3>
+        <p>Real-time chat via GossipSub protocol. Topics for rooms, DMs, and groups.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💾</div>
+        <h3>Offline Caching</h3>
+        <p>Messages cached locally when offline. Auto-sync to L2 when reconnected.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>L3 Seeder Mode</h3>
+        <p>Any peer can upgrade to L3 Seeder — buffer messages and relay to the network.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🏠</div>
+        <h3>mDNS Local Discovery</h3>
+        <p>Find peers on your LAN automatically. Zero configuration required.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔄</div>
+        <h3>Auto-Updates</h3>
+        <p>Seamlessly update to the latest version via GitHub Releases.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <section class="arch">
+    <h2>Architecture</h2>
+    <div class="arch-flow">
+      <div class="arch-node">
+        <div class="arch-level level-l4">L4</div>
+        <div class="arch-info">
+          <h4>Peer Client</h4>
+          <p>End-user chat application. Connects to L3/L2/L1 via DHT. Caches messages offline.</p>
+        </div>
+      </div>
+      <div class="arch-arrow">↕</div>
+      <div class="arch-node">
+        <div class="arch-level level-l3">L3</div>
+        <div class="arch-info">
+          <h4>Seeder</h4>
+          <p>L4 client with seeder mode enabled. Buffers and relays messages, announces in DHT.</p>
+        </div>
+      </div>
+      <div class="arch-arrow">↕</div>
+      <div class="arch-node">
+        <div class="arch-level level-l2">L2</div>
+        <div class="arch-info">
+          <h4>SuperNode</h4>
+          <p>Full DHT server with leader election. Ingests batches from L4, circuit relay for NAT.</p>
+        </div>
+      </div>
+      <div class="arch-arrow">↕</div>
+      <div class="arch-node">
+        <div class="arch-level level-l1">L1</div>
+        <div class="arch-info">
+          <h4>Admin (God Mode)</h4>
+          <p>Global oversight. Remote control, ban/annihilate, Supabase cloud backup.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD -->
+  <section class="download">
+    <h2>Download</h2>
+    <p>Choose your program and start connecting</p>
+    <div class="download-grid">
+      <div class="dl-card">
+        <div class="dl-icon">💬</div>
+        <h3>L4/L3 Chat Client</h3>
+        <p>End-user P2P chat with seeder mode</p>
+        <a href="https://github.com/EssenceMaks/EatPan_P4_Terminal/releases" class="btn btn-primary">Download</a>
+      </div>
+      <div class="dl-card">
+        <div class="dl-icon">🌍</div>
+        <h3>L2 SuperNode</h3>
+        <p>Full DHT server with leader election</p>
+        <a href="https://github.com/EssenceMaks/EatPan_P2_Dashboard/releases" class="btn btn-primary">Download</a>
+      </div>
+      <div class="dl-card">
+        <div class="dl-icon">🛡️</div>
+        <h3>L1 Admin</h3>
+        <p>God Mode — remote control & backup</p>
+        <a href="https://github.com/EssenceMaks/EatPan_P1_Admin/releases" class="btn btn-primary">Download</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>EatPan © 2026 — Decentralized by design | <a href="https://github.com/EssenceMaks">GitHub</a></p>
+  </footer>
+
+</body>
+</html>
