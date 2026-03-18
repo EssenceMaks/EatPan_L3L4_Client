@@ -384,11 +384,14 @@
       node.services.pubsub.subscribe(TOPIC)
 
       // ── Events ──
+      let firstConnection = true
+      let lastConnectMsgTime = 0
+
       node.addEventListener('peer:discovery', (evt) => {
         const id = evt.detail.id.toString()
         addLog('Discovered: ' + id.substring(0, 16) + '...')
         node.dial(evt.detail.id).catch(err => {
-          addLog('Dial failed: ' + id.substring(0, 16) + '... — ' + err.message, 'error')
+          addLog('Dial fail: ' + err.message.substring(0, 50), 'error')
         })
       })
 
@@ -398,7 +401,14 @@
         updatePeerCount()
         updateStatus('connected', 'Connected')
         addLog('+ Connected: ' + id.substring(0, 16) + '...', 'success')
-        addSystem('🔗 Connected to peer ' + id.substring(0, 12) + '...')
+
+        // Only show system message for first connection (avoid spam)
+        const now = Date.now()
+        if (firstConnection || now - lastConnectMsgTime > 30000) {
+          addSystem('🔗 Connected to peer ' + id.substring(0, 12) + '...')
+          firstConnection = false
+          lastConnectMsgTime = now
+        }
 
         // Tag peer to prevent pruning
         node.peerStore.merge(evt.detail, {
@@ -414,6 +424,7 @@
           updateStatus('connecting', 'Reconnecting...')
         }
         addLog('- Disconnected: ' + id.substring(0, 16) + '...')
+        // Don't add system message for disconnects — too spammy
       })
 
       // ── Messages ──
@@ -443,6 +454,17 @@
           } catch {}
         }
       }, 15000)
+
+      // ── Periodic presence ping (keeps GossipSub mesh alive) ──
+      setInterval(async () => {
+        try {
+          const pingMsg = new TextEncoder().encode(JSON.stringify({
+            type: 'ping', name: myName, peerId: myPeerId,
+            level: 'Web', timestamp: Date.now()
+          }))
+          await node.services.pubsub.publish(TOPIC, pingMsg)
+        } catch {}
+      }, 5000)
 
       // ── Reconnect loop ──
       setInterval(async () => {
