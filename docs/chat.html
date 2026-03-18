@@ -269,19 +269,10 @@
   <span>EatPan P2P Chat v1.0 | WebSocket → GossipSub</span>
 </footer>
 
-<!-- libp2p CDN bundle -->
+<!-- libp2p local bundle (built by web-chat/build.mjs) -->
 <script type="module">
-  // ── CDN imports for browser libp2p ──
-  import { createLibp2p } from 'https://esm.sh/libp2p@2.6.0?bundle-deps'
-  import { webSockets } from 'https://esm.sh/@libp2p/websockets@9.2.5?bundle-deps'
-  import { noise } from 'https://esm.sh/@chainsafe/libp2p-noise@16.1.0?bundle-deps'
-  import { yamux } from 'https://esm.sh/@chainsafe/libp2p-yamux@7.0.1?bundle-deps'
-  import { gossipsub } from 'https://esm.sh/@chainsafe/libp2p-gossipsub@14.2.0?bundle-deps'
-  import { identify } from 'https://esm.sh/@libp2p/identify@3.0.12?bundle-deps'
-  import { ping } from 'https://esm.sh/@libp2p/ping@2.0.12?bundle-deps'
-  import { bootstrap } from 'https://esm.sh/@libp2p/bootstrap@11.0.12?bundle-deps'
-  import { multiaddr } from 'https://esm.sh/@multiformats/multiaddr@12.3.5?bundle-deps'
-  import { all } from 'https://esm.sh/@libp2p/websockets@9.2.5/filters?bundle-deps'
+  // ── Local bundle import (replaces broken CDN) ──
+  import { createLibp2p, webSockets, wsAllFilter, noise, yamux, gossipsub, identify, ping, bootstrap, multiaddr } from './chat-bundle.js'
 
   // ── Config ──
   const TOPIC = 'eatpan-chat'
@@ -363,7 +354,7 @@
       addLog(`Bootstrap chain: ${bootstrapList.length} addr(s) — user: ${userAddrs.length}, AWS fallback: 1`)
 
       node = await createLibp2p({
-        transports: [webSockets({ filter: all })],
+        transports: [webSockets({ filter: wsAllFilter })],
         connectionEncrypters: [noise()],
         streamMuxers: [yamux()],
         connectionManager: {
