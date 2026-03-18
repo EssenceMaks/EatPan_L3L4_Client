@@ -68,6 +68,11 @@ const BOOTSTRAP_ADDRS = (process.env.BOOTSTRAP_ADDRS || BOOTSTRAP_NODE)
   .map(s => s.trim().replace(/["']/g, ''))
   .filter(Boolean)
 
+// Fixed ports for same-machine discovery
+const L4_PORT = parseInt(process.env.L4_PORT || '9100')
+const L2_PORT = parseInt(process.env.L2_PORT || '9200')
+const L1_PORT = parseInt(process.env.L1_PORT || '9300')
+
 const BOOTSTRAP_PEER_IDS = new Set(
   BOOTSTRAP_ADDRS.map(addr => {
     const parts = addr.split('/p2p/')
@@ -129,14 +134,18 @@ export async function createP2PBackend(callbacks = {}, backboneSync = null) {
   // ─── Create libp2p node ───
   const node = await createLibp2p({
     addresses: {
-      listen: ['/ip4/0.0.0.0/tcp/0']
+      listen: [
+        `/ip4/0.0.0.0/tcp/${L4_PORT}`,
+        '/ip4/0.0.0.0/tcp/0'  // also listen on random port
+      ]
     },
     connectionGater: {
       denyDialMultiaddr: async () => false // Allow dialing local IPs
     },
     connectionManager: {
-      minConnections: 1,
-      maxConnections: 50
+      minConnections: 0,
+      maxConnections: 50,
+      inboundUpgradeTimeout: 30000,
     },
     transports,
     connectionEncrypters: [noise()],
@@ -152,6 +161,8 @@ export async function createP2PBackend(callbacks = {}, backboneSync = null) {
       pubsub: gossipsub({
         emitSelf: false,
         allowPublishToZeroTopicPeers: true,
+        floodPublish: true,  // ensures messages reach all peers in small networks
+        heartbeatInterval: 1000,  // faster heartbeat for mesh maintenance
       })
     }
   })
@@ -185,7 +196,7 @@ export async function createP2PBackend(callbacks = {}, backboneSync = null) {
       const ipMatch = addr.match(/\/ip4\/([\d.]+)\//)
       if (ipMatch) {
         const ip = ipMatch[1]
-        if (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
+        if (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.') || ip === '127.0.0.1') {
           return 'direct'
         }
       }
@@ -193,9 +204,11 @@ export async function createP2PBackend(callbacks = {}, backboneSync = null) {
     return 'relay'
   }
 
-  // ─── Peer discovery events ───
+  // ─── Peer discovery events — AUTO-DIAL on discovery! ───
   node.addEventListener('peer:discovery', (evt) => {
     const discoveredId = evt.detail.id.toString()
+    if (discoveredId === peerId) return // skip self
+
     const addrs = evt.detail.multiaddrs?.map(a => a.toString()) || []
     const hasLocalAddr = addrs.some(a => {
       const m = a.match(/\/ip4\/([\d.]+)\//)
@@ -207,11 +220,41 @@ export async function createP2PBackend(callbacks = {}, backboneSync = null) {
     } else {
       discoveredViaBootstrap.add(discoveredId)
     }
+
+    // *** AUTO-DIAL: libp2p v3 does NOT auto-dial on discovery ***
+    log(`[P2P] 🔍 Discovered peer: ${discoveredId.substring(0, 16)}... (${hasLocalAddr ? 'mDNS/LAN' : 'bootstrap'})`)
+    addDiscoveryEvent('peer-found', `Discovered: ${discoveredId.substring(0, 16)}... via ${hasLocalAddr ? 'mDNS' : 'bootstrap'}`)
+    node.dial(evt.detail.id).then(() => {
+      log(`[P2P] ✅ Auto-dial success: ${discoveredId.substring(0, 16)}...`)
+      addDiscoveryEvent('auto-dial', `Connected to ${discoveredId.substring(0, 16)}...`)
+    }).catch(err => {
+      log(`[P2P] ⚠ Auto-dial failed: ${discoveredId.substring(0, 16)}... — ${err.message}`)
+    })
   })
 
   log(`[P2P] Started L4 Client: ${nodeName} (${peerId.substring(0, 12)}...)`)
+  log(`[P2P] Listening on port ${L4_PORT}`)
 
-  // ─── Explicit bootstrap dial ───
+  // ─── Direct localhost dial to L2 (port 9200) and L1 (port 9300) ───
+  async function dialLocalhost(port, label) {
+    try {
+      const addr = multiaddr(`/ip4/127.0.0.1/tcp/${port}`)
+      await node.dial(addr, { signal: AbortSignal.timeout(5000) })
+      log(`[P2P] ✅ Connected to ${label} at localhost:${port}`)
+      addDiscoveryEvent('local-connect', `Connected to ${label} at localhost:${port}`)
+    } catch (err) {
+      log(`[P2P] ⚠ ${label} at localhost:${port} not reachable: ${err.message}`)
+      addDiscoveryEvent('local-miss', `${label} at localhost:${port} not reachable`)
+    }
+  }
+
+  // Try connecting to L2 and L1 on fixed ports after a short delay
+  setTimeout(async () => {
+    await dialLocalhost(L2_PORT, 'L2 SuperNode')
+    await dialLocalhost(L1_PORT, 'L1 Admin')
+  }, 2000)
+
+  // ─── Explicit bootstrap dial (AWS) ───
   if (BOOTSTRAP_ADDRS.length > 0) {
     log(`[P2P] Bootstrap DHT: ${BOOTSTRAP_ADDRS.length} addr(s)`)
     setTimeout(async () => {
